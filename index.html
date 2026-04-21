@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptiScan Pro — Focus-Shift Lens Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo">
+    <div class="logo-ring">👁</div>
+    OPTISCAN PRO
+  </div>
+  <div class="hdr-r">
+    <span class="badge" id="sBadge">STANDBY</span>
+    <span class="badge" style="color:var(--tx4);border-color:var(--bd)">v6.0</span>
+  </div>
+</header>
+<div class="prog"><div class="prog-fill" id="pBar" style="width:0%"></div></div>
+
+<main class="main">
+
+<!-- ══ WELCOME ══════════════════════════════════════════════════════════ -->
+<div class="step on" id="step-welcome">
+  <div class="eyebrow">Spectacle Power Analyzer — v6.0</div>
+  <h1>Lens Power<br><span class="grad">Focus-Shift Scanner</span></h1>
+  <p class="lead">No reference image or printed pattern needed. Place glasses in front of your camera — the app measures how much the camera has to refocus to stay sharp, and calculates lens power from that shift. 10 readings, weighted median, fully automated.</p>
+
+  <div class="feats">
+    <div class="feat">
+      <div class="fi">🎯</div>
+      <div class="fn">Focus-Shift Method</div>
+      <div class="fd">Camera locks focus on distant object, then re-focuses through lens. Power = 1/d_lens − 1/d_ref</div>
+    </div>
+    <div class="feat">
+      <div class="fi">🔒</div>
+      <div class="fn">Focus Lock + Unlock</div>
+      <div class="fd">Locks focus for calibration, unlocks for lens measurement. No manual settings needed.</div>
+    </div>
+    <div class="feat">
+      <div class="fi">🔁</div>
+      <div class="fn">10-Cycle Averaging</div>
+      <div class="fd">Repeats 10 times and uses weighted median with IQR outlier rejection for accuracy</div>
+    </div>
+    <div class="feat">
+      <div class="fi">📐</div>
+      <div class="fn">No Pattern Required</div>
+      <div class="fd">Just point at any distant real-world object. No checkerboard, no printed grid needed.</div>
+    </div>
+    <div class="feat">
+      <div class="fi">🌀</div>
+      <div class="fn">Cylinder Detection</div>
+      <div class="fd">Uses H/V Sobel sharpness asymmetry to estimate cylinder power and axis</div>
+    </div>
+    <div class="feat">
+      <div class="fi">📊</div>
+      <div class="fn">Live Focus Graph</div>
+      <div class="fd">Real-time sharpness and focus distance plotted for each cycle</div>
+    </div>
+  </div>
+
+  <div class="card-cy mb5">
+    <strong class="small">📋 What you need:</strong>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">
+      <span class="tag-cy">Spectacle glasses to test</span>
+      <span class="tag-cy">Phone with back camera</span>
+      <span class="tag-cy">A distant object to focus on (wall, window frame, etc.)</span>
+      <span class="tag-cy">Good lighting</span>
+    </div>
+  </div>
+
+  <div class="card-am mb5 smallest am">
+    ⚠ Best results require a camera that exposes the <strong>focusDistance</strong> API (most Android/Chrome devices). iPhones may use sharpness-comparison fallback mode.
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-cy btn-lg" id="btnStart">▶ Start Scan</button>
+  </div>
+</div>
+
+<!-- ══ SETUP ════════════════════════════════════════════════════════════ -->
+<div class="step" id="step-setup">
+  <div class="eyebrow">Step 1 — Setup</div>
+  <h2>Configure Scan</h2>
+
+  <div class="row">
+    <div class="col-w">
+      <div class="card">
+        <div class="eyebrow mb3">Scan Eye</div>
+        <div class="eye-sel">
+          <div class="eye-btn sel" data-eye="right">
+            <div style="font-size:1.1rem">👁</div><div class="ebl">Right</div><div class="ebs">OD</div>
+          </div>
+          <div class="eye-btn" data-eye="left">
+            <div style="font-size:1.1rem">👁</div><div class="ebl">Left</div><div class="ebs">OS</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt4">
+        <div class="eyebrow mb2">Lens-to-Camera Distance</div>
+        <p class="smallest tx2 mb3">Used as fallback if camera does not expose focus distance API. Measure with a ruler.</p>
+        <div class="srow">
+          <label>Distance <span id="distLbl">50 mm</span></label>
+          <input type="range" id="distSlider" min="10" max="200" value="50" step="5">
+        </div>
+      </div>
+
+      <div class="card mt4">
+        <div class="eyebrow mb2">How It Works</div>
+        <pre class="setup-diag">  ┌──────────────────────────┐
+  │  DISTANT OBJECT / WALL   │  ← camera points here
+  └──────────┬───────────────┘
+             │ (∞ reference)
+        ┌────┴────┐
+        │  LENS   │  ← hold glasses here
+        └────┬────┘
+             │ ← 50 mm
+        ┌────┴────┐
+        │  CAMERA │  ← back camera
+        └─────────┘
+
+Step 1: Calibrate (no lens) → d_ref
+Step 2: Place lens → camera refocuses → d_lens
+Power = 1/d_lens − 1/d_ref</pre>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card-cy">
+        <div class="eyebrow mb2">Tips for accuracy</div>
+        <ul class="tip-list">
+          <li>Point at a <strong>distant, high-contrast object</strong> (wall edge, window frame, text on a far board)</li>
+          <li>Keep the camera <strong>completely still</strong> during each cycle</li>
+          <li>Hold lens <strong>perpendicular</strong> to camera axis, centred over lens</li>
+          <li>Use <strong>good, even lighting</strong> — no direct glare on lens</li>
+          <li>Keep lens at consistent distance during each measurement</li>
+          <li>More cycles = better accuracy — aim for all 10</li>
+        </ul>
+      </div>
+
+      <button class="btn btn-cy mt5" id="btnGoScan" style="width:100%">Start Scanning →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCAN ══════════════════════════════════════════════════════════════ -->
+<div class="step" id="step-scan">
+  <div class="eyebrow">Step 2 — Live Scan</div>
+  <h2>Scanning <span id="scanEyeLbl">Right</span> Eye <span class="smaller tx2" id="scanEyeCode">(OD)</span></h2>
+
+  <div class="row">
+    <div class="col-w">
+      <!-- Camera -->
+      <div class="cam-wrap state-idle" id="mainCamWrap">
+        <video id="mainVid" autoplay playsinline muted></video>
+        <div class="sf-ov">
+          <div class="sf"><div class="c1"></div><div class="c2"></div><div class="c3"></div><div class="c4"></div><div class="sln"></div></div>
+        </div>
+        <div class="state-banner sb-idle" id="stateBanner">INITIALIZING…</div>
+        <div class="cam-hud">
+          <div class="hud-item">
+            <div class="hud-lbl">SHARPNESS</div>
+            <div class="hud-track"><div class="hud-fill focus-fill" id="focFill" style="width:0%"></div></div>
+            <div class="hud-val" id="focVal">—</div>
+          </div>
+          <div class="hud-item">
+            <div class="hud-lbl">HORIZ SHARP</div>
+            <div class="hud-track"><div class="hud-fill" style="background:var(--am)" id="shHFill" style="width:0%"></div></div>
+            <div class="hud-val" id="shHVal">—</div>
+          </div>
+          <div class="hud-item">
+            <div class="hud-lbl">VERT SHARP</div>
+            <div class="hud-track"><div class="hud-fill" style="background:var(--vl)" id="shVFill" style="width:0%"></div></div>
+            <div class="hud-val" id="shVVal">—</div>
+          </div>
+          <div class="hud-item" id="focDistHud">
+            <div class="hud-lbl">FOCUS DIST</div>
+            <div class="hud-track"><div class="hud-fill" style="background:var(--cy)" id="fdFill" style="width:50%"></div></div>
+            <div class="hud-val" id="fdVal">—</div>
+          </div>
+        </div>
+        <div class="amask" id="capMask">
+          <div class="spin"></div>
+          <div class="atxt" id="capTxt">CAPTURING…</div>
+          <div class="asub" id="capSub">Hold still</div>
+        </div>
+      </div>
+
+      <!-- Focus graph -->
+      <div class="wave-wrap mt3">
+        <canvas id="focusGraph" height="80"></canvas>
+        <div class="wave-legend">
+          <div class="wleg"><div class="wdot" style="background:rgba(0,229,255,.6)"></div>Sharpness</div>
+          <div class="wleg"><div class="wdot" style="background:rgba(177,151,252,.6)"></div>Focus distance</div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="btn-row mt3">
+        <button class="btn btn-gn" id="btnCalibrate">📐 Calibrate (no lens)</button>
+        <button class="btn btn-cy" id="btnCaptureLens" disabled>🔬 Capture Cycle 1 / 10</button>
+      </div>
+      <div class="btn-row mt1">
+        <button class="btn btn-ghost btn-sm" id="btnFlipCam">↔ Flip Camera</button>
+        <button class="btn btn-ghost btn-sm" id="btnBackSetup">← Setup</button>
+      </div>
+    </div>
+
+    <div class="col">
+      <!-- Instruction card -->
+      <div class="card-cy mb3">
+        <div class="eyebrow mb2">Instructions</div>
+        <p id="instrText" class="small tx2" style="line-height:1.8">Point camera at a distant object and press Calibrate.</p>
+      </div>
+
+      <!-- Cycle progress dots -->
+      <div class="card mb3">
+        <div class="eyebrow mb2">Cycle Progress</div>
+        <div class="cycles-row">
+          <div class="cycle-count"><span id="cycleCount">0</span> / 10</div>
+          <div id="cycleDots" class="cycle-dots"></div>
+        </div>
+      </div>
+
+      <!-- Calibration result card -->
+      <div class="card mt3" id="calCard" style="display:none">
+        <div class="eyebrow mb2">Calibration</div>
+        <div class="drow mt2">
+          <div class="db"><div class="dl">REF DIST</div><div class="dv cy" id="calDistVal">—</div></div>
+          <div class="db"><div class="dl">SHARPNESS</div><div class="dv" id="calSharpVal">—</div></div>
+        </div>
+      </div>
+
+      <!-- Running average -->
+      <div class="card mt3" id="runCard" style="display:none">
+        <div class="eyebrow">Running Average</div>
+        <div class="pwr zero mt3 tc" id="runPwr" style="font-size:2.4rem">—</div>
+        <div class="tc mt1 tx2 small" id="runCls">—</div>
+        <div class="drow mt3">
+          <div class="db"><div class="dl">SPHERE</div><div class="dv cy" id="runSph">—</div></div>
+          <div class="db"><div class="dl">CYL</div><div class="dv am" id="runCyl">—</div></div>
+          <div class="db"><div class="dl">AXIS</div><div class="dv vl" id="runAx">—</div></div>
+        </div>
+        <div class="mt3">
+          <div class="smallest tx3 mb2" style="display:flex;justify-content:space-between">
+            <span>CONFIDENCE</span><span id="runConf">—</span>
+          </div>
+          <div class="ctrack"><div class="cfill" id="runCfill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Eye progress summary -->
+      <div class="mt4">
+        <div class="eyebrow mb2">Scan Progress</div>
+        <div style="display:flex;gap:7px">
+          <div class="eyec" style="flex:1"><div class="ecl">RIGHT (OD)</div><div class="pwr zero" id="progR" style="font-size:1.5rem">—</div></div>
+          <div class="eyec" style="flex:1"><div class="ecl">LEFT (OS)</div><div class="pwr zero" id="progL" style="font-size:1.5rem">—</div></div>
+        </div>
+      </div>
+
+      <div class="btn-row mt4" id="nextBtns" style="display:none">
+        <button class="btn btn-out" id="btnSwitchEye">Switch Eye →</button>
+        <button class="btn btn-cy" id="btnFinish">View Results →</button>
+      </div>
+
+      <!-- Camera spec card -->
+      <div class="card mt4" id="camSpecCard" style="display:none">
+        <div class="eyebrow mb2">Camera Capabilities</div>
+        <div class="spec-grid" id="specGrid"></div>
+        <div class="smallest tx3 mt2" id="focusApiNote"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cycle readings table -->
+  <div class="mt5">
+    <div class="eyebrow mb2">Cycle Readings</div>
+    <div style="overflow-x:auto">
+      <table class="rx-tbl">
+        <thead>
+          <tr>
+            <th>#</th><th>Power</th><th>d_ref</th><th>d_lens</th>
+            <th>Cylinder</th><th>Axis</th><th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="cycleTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RESULTS ══════════════════════════════════════════════════════════ -->
+<div class="step" id="step-results">
+  <div class="eyebrow">Scan Complete ✓</div>
+  <h2>Prescription Results</h2>
+
+  <div class="row mt5">
+    <div class="col-w">
+      <div class="card">
+        <div class="eyebrow">Clinical Prescription</div>
+        <table class="rx-tbl mt3">
+          <thead>
+            <tr><th>Eye</th><th>Sphere</th><th>Cylinder</th><th>Axis</th><th>Classification</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Right (OD)</td>
+              <td class="td-sph" id="rxRS">—</td><td class="td-cyl" id="rxRC">—</td>
+              <td class="td-ax" id="rxRA">—</td><td class="tx2" id="rxRCl" style="font-size:.75rem">—</td>
+            </tr>
+            <tr>
+              <td>Left (OS)</td>
+              <td class="td-sph" id="rxLS">—</td><td class="td-cyl" id="rxLC">—</td>
+              <td class="td-ax" id="rxLA">—</td><td class="tx2" id="rxLCl" style="font-size:.75rem">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card mt4">
+        <div class="eyebrow">Measurement Diagnostics</div>
+        <div class="drow mt3">
+          <div class="db"><div class="dl">CYCLES</div><div class="dv" id="dCyc">—</div></div>
+          <div class="db"><div class="dl">METHOD</div><div class="dv cy" id="dMeth">—</div></div>
+          <div class="db"><div class="dl">CONFIDENCE</div><div class="dv" id="dCnf">—</div></div>
+        </div>
+      </div>
+
+      <div class="btn-row mt4">
+        <button class="btn btn-out btn-sm" id="btnExpJSON">⬇ JSON</button>
+        <button class="btn btn-out btn-sm" id="btnExpCSV">⬇ CSV</button>
+        <button class="btn btn-out btn-sm" id="btnPrint">🖨 Print</button>
+        <button class="btn btn-ghost btn-sm" id="btnNewScan">↺ New Scan</button>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="eyec mb3">
+        <div class="ecl">RIGHT EYE (OD)</div>
+        <div class="pwr zero" id="finR" style="font-size:2rem">—</div>
+        <div class="smallest tx2 mt2" id="finRCl">—</div>
+        <div class="smallest am mt1" id="finRCy"></div>
+      </div>
+      <div class="eyec">
+        <div class="ecl">LEFT EYE (OS)</div>
+        <div class="pwr zero" id="finL" style="font-size:2rem">—</div>
+        <div class="smallest tx2 mt2" id="finLCl">—</div>
+        <div class="smallest am mt1" id="finLCy"></div>
+      </div>
+      <div class="smallest tx3 tc mt5" style="line-height:1.9;padding:0 8px">
+        ⚠ Approximate estimate (±0.25–0.50 D typical). Accuracy depends on camera focusDistance API support and stable conditions. Always consult a licensed optometrist.
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<canvas id="capCanvas" style="display:none"></canvas>
+<div id="notif" class="notif"></div>
+
+<script src="optics.js"></script>
+<script src="camera.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+</body>
+</html>

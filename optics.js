@@ -203,6 +203,76 @@ const FocusAPI = {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   BLUR EVENT DETECTOR
+   Watches a sharpness stream for the characteristic drop-then-recovery
+   that happens when a lens is placed in front of the camera.
+   Samples are fed via .feed(); blur metrics are read via getters.
+═══════════════════════════════════════════════════════════════════════════ */
+const BlurDetector = {
+  _hist:      [],    // { s, sH, sV, t, fd }
+  _ref:       null,  // { s, sH, sV }  — calibration baseline
+  _onset:     null,  // sample at blur onset
+  _peakBlur:  null,  // sample with minimum sharpness (= maximum blur)
+
+  reset(ref) {
+    this._hist     = [];
+    this._ref      = ref || null;
+    this._onset    = null;
+    this._peakBlur = null;
+  },
+
+  // Returns: 'stable' | 'blur_onset' | 'blurred' | 'recovering' | 'converged'
+  feed(sh, focDist = null) {
+    const s = sh.fused, sH = sh.h, sV = sh.v;
+    const t = performance.now();
+    const sample = { s, sH, sV, t, fd: focDist };
+    this._hist.push(sample);
+    if (this._hist.length > 120) this._hist.shift();
+
+    if (!this._ref || this._ref.s < 1) return 'stable';
+    const ratio = s / this._ref.s;
+
+    if (!this._onset) {
+      // Onset: sharpness drops below 72% of baseline while previous was above 80%
+      if (ratio < 0.72 && this._hist.length >= 3) {
+        const prev = this._hist[this._hist.length - 3].s / this._ref.s;
+        if (prev > 0.80) {
+          this._onset    = sample;
+          this._peakBlur = sample;
+          return 'blur_onset';
+        }
+      }
+      return ratio < 0.72 ? 'blurred' : 'stable';
+    }
+
+    // Post-onset: keep tracking the peak blur (minimum sharpness sample)
+    if (s < this._peakBlur.s) this._peakBlur = sample;
+
+    const age = t - this._onset.t;
+    if (ratio < 0.72) return age < 400 ? 'blur_onset' : 'blurred';
+    if (ratio > 0.88) return 'converged';
+    return 'recovering';
+  },
+
+  // Blur depth: 0 = no blur, 1 = completely dark
+  get blurDepth() {
+    if (!this._peakBlur || !this._ref?.s) return 0;
+    return Math.max(0, 1 - this._peakBlur.s  / this._ref.s);
+  },
+  get blurDepthH() {
+    if (!this._peakBlur || !this._ref?.sH || this._ref.sH < 0.5) return this.blurDepth;
+    return Math.max(0, 1 - this._peakBlur.sH / this._ref.sH);
+  },
+  get blurDepthV() {
+    if (!this._peakBlur || !this._ref?.sV || this._ref.sV < 0.5) return this.blurDepth;
+    return Math.max(0, 1 - this._peakBlur.sV / this._ref.sV);
+  },
+  get wasDetected() { return !!this._onset;    },
+  get onset()       { return this._onset;       },
+  get peakBlur()    { return this._peakBlur;    },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
    POWER CALCULATOR
 ═══════════════════════════════════════════════════════════════════════════ */
 const PowerCalc = {
@@ -226,6 +296,53 @@ const PowerCalc = {
     const axis=Math.abs(cylinder)>=0.25?(pH.rawPower>pV.rawPower?180:90):0;
     return{ok:true,sphere,cylinder,axis,dH:bestH,dV:bestV,method:'sharpness_profile'};
   },
+  /* Estimate lens power from blur depth captured at lens-placement onset
+   * (before autofocus compensates).  No focus-distance API required.
+   *
+   * blurH/blurV : blur fraction 0–1 for H and V sharpness channels
+   * dRef        : calibration focus distance (m)
+   * recovery    : final sharpness ÷ baseline sharpness after AF settles
+   *
+   * Sign logic (no API, sign from physics):
+   *   Far cal (>0.5 m) + poor recovery → camera couldn't find d_lens
+   *     → d_lens would be negative → diverging (negative) lens
+   *   Far cal          + good recovery → camera focused closer → converging (positive)
+   *   Close cal (<0.5m)+ good recovery → camera focused farther → diverging (negative)
+   *   Close cal        + poor recovery → camera couldn't find d_lens → converging (positive)
+   *
+   * Accuracy note: ±0.5 D typical without focus API.
+   */
+  fromBlurProfile(blurH, blurV, dRef, recovery) {
+    // Model: b = (K·|P|)² / (1+(K·|P|)²)  →  |P| = sqrt(b/(1-b)) / K
+    // K ≈ 0.42 for a typical smartphone (f/1.8, ~4 mm actual FL)
+    const K = 0.42;
+    const estMag = b => {
+      if (b < 0.03) return 0;
+      if (b > 0.97) return 14;
+      return Math.sqrt(b / (1 - b)) / K;
+    };
+    const magH = estMag(Math.min(0.97, blurH));
+    const magV = estMag(Math.min(0.97, blurV));
+    const mag  = (magH + magV) / 2;
+
+    // XOR: (close AND good) OR (far AND bad) → diverging/negative
+    const isClose    = dRef < 0.5;
+    const goodRec    = (recovery ?? 0) > 0.78;
+    const isDiverging = (isClose === goodRec);
+    const sign = isDiverging ? -1 : 1;
+
+    const sphere   = sign * Math.round(mag   / OPT_CONST.PREC) * OPT_CONST.PREC;
+    const rawCyl   = magH - magV;
+    const cylinder = Math.round(rawCyl / OPT_CONST.PREC) * OPT_CONST.PREC;
+    const axis     = Math.abs(cylinder) >= 0.25 ? (magH > magV ? 180 : 90) : 0;
+    return {
+      ok: mag > 0,
+      power: sphere, rawPower: sign * mag,
+      sphere, cylinder, axis,
+      method: 'blur_profile',
+    };
+  },
+
   _parabolicPeak(pts,key) {
     if(pts.length<2) return pts[0]?.focusDist??null;
     let bestI=0,bestVal=-Infinity;

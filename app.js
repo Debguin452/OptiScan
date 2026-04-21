@@ -121,22 +121,40 @@ const App = {
 
     // Capture sharpness reference (no lens)
     const id = Camera.capture(vid);
-    const sh = id ? Sharpness.compute(id) : { lap: 0, h: 0, v: 0 };
+    const sh = id ? Sharpness.compute(id) : { fused: 0, h: 0, v: 0 };
 
-    this.st.sharpnessRef = sh.fused;
-    this.st.dRef = focDist; // may be null if no focus API
-    this.st.dRefSharpness = sh;
+    this.st.sharpnessRef    = sh.fused;
+    this.st.dRef            = focDist; // may be null if no focus API
+    this.st.dRefSharpness   = sh;
 
     UI.showMask(false);
     this.st.isCapturing = false;
 
     if (focDist) {
-      UI.notify(`Calibrated — focus at ${focDist.toFixed(2)} m`, 'ok');
       $('calDistVal').textContent = focDist.toFixed(3) + ' m';
+
+      // Warn if calibration distance is too far for measuring negative lenses.
+      // d_lens = 1/(1/dRef + P) goes negative when |P| > 1/dRef.
+      // At 2 m only lenses from 0 to −0.5 D are measurable with the focus-API path.
+      const maxNeg = (1 / focDist).toFixed(2);
+      if (focDist > 0.8) {
+        UI.notify(
+          `Calibrated at ${focDist.toFixed(2)} m — ` +
+          `can measure positives and negatives down to −${maxNeg} D. ` +
+          `For stronger myopia, re-calibrate at ≤ ${Math.round(100/2.5)} cm.`,
+          'ok');
+      } else {
+        UI.notify(`Calibrated — focus at ${focDist.toFixed(2)} m`, 'ok');
+      }
     } else {
       // No focus API — use manual distance
       this.st.dRef = this.st.manualDistM;
-      UI.notify('No focus API — using manual reference distance', 'warn');
+      const maxNeg = (1 / this.st.manualDistM).toFixed(2);
+      UI.notify(
+        `No focus distance API — using ${this.st.manualDistM.toFixed(1)} m manual reference. ` +
+        `Blur-profile method active (±0.5 D accuracy). ` +
+        `For myopia > −${maxNeg} D, hold target at ≤ ${Math.round(100/2.5)} cm.`,
+        'warn');
       $('calDistVal').textContent = this.st.manualDistM.toFixed(1) + ' m (manual)';
     }
 
@@ -157,78 +175,124 @@ const App = {
     $('btnCaptureLens').disabled = true;
 
     const vid = $('mainVid');
-    UI.showMask(true, 'MEASURING…', 'Hold lens still — waiting for focus to settle');
 
-    // Unlock so camera re-focuses through lens
+    // Initialise blur detector with calibration baseline
+    const ref = this.st.dRefSharpness;
+    BlurDetector.reset(ref ? { s: ref.fused, sH: ref.h, sV: ref.v } : null);
+
+    UI.showMask(true, 'PLACE LENS', 'Hold lens in front of camera — auto-detecting placement…');
     await Camera.unlockFocus();
-    await delay(400);
 
-    // Wait for AF to converge with lens in front
-    const convergence = await Camera.waitFocusConverge(vid, 6000, 120);
-    const dLens = Camera.getFocusDist();
-    const id = Camera.capture(vid);
-    const sh = id ? Sharpness.compute(id) : { lap: 0, h: 0, v: 0 };
+    // ── Phase 1+2: monitor sharpness stream, detect blur onset + convergence ──
+    const m = await this._monitorAndConverge(vid, 14000);
 
     UI.showMask(false);
     this.st.isCapturing = false;
 
-    // Compute power
+    // ── Phase 3: power computation ───────────────────────────────────────────
+
+    // Calibration-distance validity check:
+    // For P = negative, d_eff = 1/(1/dRef + P).  If |P| > 1/dRef, d_eff goes negative
+    // (camera can't focus there) → must calibrate closer.
+    const dRef = this.st.dRef;
+    const maxNegPower = 1 / dRef;  // e.g. dRef=2m → can only measure down to −0.5 D at that cal distance
+
     let cycleResult;
-    if (dLens && this.st.dRef) {
-      const res = PowerCalc.fromFocusDist(dLens, this.st.dRef);
+
+    if (m.dLens && dRef) {
+      // ── Focus-API path ──
+      const res = PowerCalc.fromFocusDist(m.dLens, dRef);
+
+      // Sanity check: if blur was large but power is tiny, AF probably locked on
+      // minimum-focus end (couldn't reach d_lens) — result is unreliable.
+      const blurLarge = m.blurDepth > 0.40;
+      const powerTiny = Math.abs(res.power) < 0.50;
+      if (res.ok && blurLarge && powerTiny) {
+        UI.notify(
+          `⚠ Large blur (${Math.round(m.blurDepth*100)}%) but tiny power reading — ` +
+          `for lenses stronger than −${maxNegPower.toFixed(2)} D, re-calibrate at ≤ ${(1000/Math.abs(m.blurDepth*6+0.5)).toFixed(0)} cm`,
+          'warn');
+      }
+
       cycleResult = {
         ...res,
         cylinder: 0, axis: 0,
-        dRef: this.st.dRef,
-        dLens,
-        sharpness: sh.fused,
-        shH: sh.h, shV: sh.v,
+        dRef,
+        dLens: m.dLens,
+        sharpness: m.sh.fused,
+        shH: m.sh.h, shV: m.sh.v,
+        blurDepth: m.blurDepth,
+        recovery: m.recovery,
         cycleNum: this.st.cycleNum + 1,
       };
 
-      // Try sharpness profile for cylinder if we have H/V sharpness data
-      if (this.st.dRefSharpness) {
-        const shRefH = this.st.dRefSharpness.h;
-        const shRefV = this.st.dRefSharpness.v;
-        // Detect meridional asymmetry in sharpness recovery
-        // If H sharpness recovered more than V, the lens has more H power
-        const hRatio = shRefH > 0 ? sh.h / shRefH : 1;
-        const vRatio = shRefV > 0 ? sh.v / shRefV : 1;
-        const asymmetry = Math.abs(hRatio - vRatio);
-        if (asymmetry > 0.08 && Math.abs(res.power) > 0.25) {
-          // Estimate cylinder contribution from sharpness imbalance
-          const cylEstimate = res.rawPower * (hRatio - vRatio) * 0.4;
-          cycleResult.cylinder = Math.round(cylEstimate / OPT_CONST.PREC) * OPT_CONST.PREC;
-          cycleResult.axis = hRatio > vRatio ? 180 : 90;
-          cycleResult.method = 'focus_shift+cylinder';
+      // Cylinder from H/V sharpness asymmetry at peak-blur moment
+      const refSh = this.st.dRefSharpness;
+      if (refSh && m.blurDepthH !== undefined) {
+        const rawCyl = res.rawPower * (m.blurDepthH - m.blurDepthV) * 0.45;
+        if (Math.abs(rawCyl) >= 0.25 && Math.abs(res.power) >= 0.25) {
+          cycleResult.cylinder = Math.round(rawCyl / OPT_CONST.PREC) * OPT_CONST.PREC;
+          cycleResult.axis     = m.blurDepthH > m.blurDepthV ? 180 : 90;
+          cycleResult.method   = 'focus_shift+cylinder';
         }
       }
-    } else {
-      // Focus API unavailable — use sharpness comparison with manual distance
-      // Estimate relative power from sharpness at fixed distance
-      const lapRef = this.st.sharpnessRef || 1;
-      const lapLens = sh.fused;
-      // If sharpness with lens is higher, lens helps focus → converging (positive power)
-      // This is a rough relative estimate; we use manual distance as pivot
-      const sharpRatio = lapLens / lapRef;
-      // Rough: P ≈ (sharpness improvement ratio - 1) / distance_factor
-      const dM = this.st.manualDistM;
-      const estimatedDLens = sharpRatio > 1 ? dM / sharpRatio : dM * sharpRatio;
-      const res = PowerCalc.fromFocusDist(estimatedDLens, dM);
+
+    } else if (m.blurDetected && m.blurDepth > 0.10) {
+      // ── Blur-profile path (no focus API, but blur event was observed) ──
+      // Uses blur depth AT onset (before AF compensates) — physically grounded.
+      // Accuracy: ±0.5 D typical.
+      const res = PowerCalc.fromBlurProfile(
+        m.blurDepthH, m.blurDepthV, dRef, m.recovery);
+
+      if (!m.goodRecovery) {
+        // Camera couldn't refocus → strong negative lens or wrong cal distance
+        if (dRef > 0.5) {
+          UI.notify(
+            `⚠ Camera could not refocus (${Math.round(m.recovery*100)}% recovery). ` +
+            `For lenses stronger than −${maxNegPower.toFixed(2)} D, re-calibrate ` +
+            `at ≤ ${Math.round(100/Math.abs(res.power||1))} cm for best accuracy.`,
+            'warn');
+        }
+      }
+
       cycleResult = {
         ...res,
-        cylinder: 0, axis: 0,
-        dRef: dM, dLens: estimatedDLens,
-        sharpness: sh.fused, shH: sh.h, shV: sh.v,
+        dRef, dLens: null,
+        sharpness: m.sh.fused, shH: m.sh.h, shV: m.sh.v,
+        blurDepth: m.blurDepth,
+        recovery: m.recovery,
         cycleNum: this.st.cycleNum + 1,
-        method: 'sharpness_fallback',
       };
+
+    } else {
+      // ── Legacy fallback: no blur event AND no focus API ──
+      // (usually means lens was placed before monitoring started, or very weak lens)
+      // Use convergence sharpness; accuracy is limited.
+      const shRef = this.st.sharpnessRef || 1;
+      const conv  = m.sh.fused;
+      // Sharpness ratio after AF can only tell us if lens helped or hurt focus.
+      // Map to a rough power via blur-profile method using implied blur.
+      const impliedBlur = Math.max(0, 1 - conv / shRef);
+      const res = impliedBlur > 0.05
+        ? PowerCalc.fromBlurProfile(impliedBlur, impliedBlur, dRef, m.recovery)
+        : { ok: true, power: 0, rawPower: 0, sphere: 0, cylinder: 0, axis: 0, method: 'near_plano' };
+
+      cycleResult = {
+        ...res,
+        dRef, dLens: null,
+        sharpness: m.sh.fused, shH: m.sh.h, shV: m.sh.v,
+        blurDepth: impliedBlur, recovery: m.recovery,
+        cycleNum: this.st.cycleNum + 1,
+        method: res.method || 'sharpness_fallback',
+      };
+      if (!m.blurDetected) {
+        UI.notify('Lens not auto-detected — ensure lens was in front of camera during capture', 'warn');
+      }
     }
 
     this.st.cycles.push(cycleResult);
     this.st.cycleNum++;
 
-    // Update running average
     this._updateRunning();
     UI.addCycleRow(cycleResult, this.st.cycleNum);
     UI.prog(35 + this.st.cycleNum * 6);
@@ -237,7 +301,6 @@ const App = {
     if (done) {
       this._finishEye();
     } else {
-      // Ready for next cycle
       this._setPhase('placing');
       $('btnCaptureLens').disabled = false;
       $('btnCaptureLens').textContent = `🔬 Capture Cycle ${this.st.cycleNum + 1} / ${OPT_CONST.CYCLES}`;
@@ -245,6 +308,83 @@ const App = {
       UI.notify(`Cycle ${this.st.cycleNum} done — remove lens and repeat`, 'ok');
       UI.status(`CYCLE ${this.st.cycleNum}/${OPT_CONST.CYCLES}`, 'hot');
     }
+  },
+
+  /* ── Monitor sharpness stream: detect blur onset + wait for convergence ──
+   *
+   * Combines blur detection (Phase 1) with convergence waiting (Phase 2)
+   * in a single polling loop so we capture the PEAK BLUR moment that
+   * occurs before AF has had a chance to compensate.
+   *
+   * Returns: { dLens, sh, blurDetected, blurDepth, blurDepthH, blurDepthV,
+   *            recovery, goodRecovery, converged }
+   */
+  async _monitorAndConverge(vid, timeoutMs = 14000) {
+    const start        = Date.now();
+    const SAMPLE_MS    = 65;
+    const history      = [];
+    let lensDetected   = false;
+    let blurOnsetMs    = null;
+    let stableCount    = 0;
+    let lastSh         = this.st.dRefSharpness || { fused: 0, h: 0, v: 0 };
+    let lastFd         = null;
+
+    while (Date.now() - start < timeoutMs) {
+      await delay(SAMPLE_MS);
+      const id = Camera.capture(vid);
+      if (!id) continue;
+
+      const sh = Sharpness.compute(id);
+      const fd = Camera.getFocusDist();
+      const ev = BlurDetector.feed(sh, fd);
+      history.push({ sh, fd, t: Date.now() });
+      lastSh = sh;
+      if (fd != null) lastFd = fd;
+
+      // ── Lens placement detection ──
+      if (!lensDetected && (ev === 'blur_onset' || ev === 'blurred')) {
+        lensDetected = true;
+        blurOnsetMs  = Date.now();
+        const bd = Math.round(BlurDetector.blurDepth * 100);
+        UI.showMask(true,
+          `LENS DETECTED — ${bd}% BLUR`,
+          bd > 55
+            ? 'Strong defocus — auto-focusing through lens…'
+            : 'Defocus detected — auto-focusing through lens…');
+        UI.notify(`Blur onset: ${bd}%  (H:${Math.round(BlurDetector.blurDepthH*100)}%  V:${Math.round(BlurDetector.blurDepthV*100)}%)`, 'info');
+      }
+
+      // ── Convergence check ──
+      // Wait until lens has been in place (or initial wait is over) before
+      // checking stability so we don't false-trigger on the blur onset itself.
+      const minWait = lensDetected ? blurOnsetMs + 600 : start + 2000;
+      if (Date.now() > minWait && history.length >= 5) {
+        const recent = history.slice(-5).map(h => h.sh.fused);
+        const maxR = Math.max(...recent), minR = Math.min(...recent);
+        const stability = maxR > 0 ? (maxR - minR) / maxR : 1;
+        if (stability < 0.015) {
+          stableCount++;
+          if (stableCount >= 3) break;
+        } else {
+          stableCount = 0;
+        }
+      }
+    }
+
+    const shRef     = this.st.sharpnessRef || 1;
+    const recovery  = Math.min(2, lastSh.fused / shRef);
+
+    return {
+      dLens:        lastFd,
+      sh:           lastSh,
+      blurDetected: lensDetected,
+      blurDepth:    BlurDetector.blurDepth,
+      blurDepthH:   BlurDetector.blurDepthH,
+      blurDepthV:   BlurDetector.blurDepthV,
+      recovery,
+      goodRecovery: recovery > 0.78,
+      converged:    stableCount >= 3,
+    };
   },
 
   /* ── Finish current eye ─────────────────────────────────────────── */

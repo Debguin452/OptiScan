@@ -91,7 +91,7 @@ const Camera = {
       if (!id) continue;
       const sh = Sharpness.compute(id);
       const focDist = this.getFocusDist();
-      history.push({ lap: sh.lap, shH: sh.h, shV: sh.v, focDist, t: Date.now() });
+      history.push({ lap: sh.fused, shH: sh.h, shV: sh.v, focDist, t: Date.now() });
 
       if (history.length >= 5) {
         // Check if sharpness plateau reached (< 1.5% change over last 4 samples)

@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptiScan Pro — Spectacle Power Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#040d18;--s1:#08162a;--s2:#0d2040;--s3:#132850;
+  --bd:#1a3454;--bd2:#255278;--bd3:#3a72a8;
+  --cy:#00e5ff;--cy2:rgba(0,229,255,.10);--cy3:rgba(0,229,255,.20);--cyglow:rgba(0,229,255,.35);
+  --gn:#00e6a0;--gn2:rgba(0,230,160,.10);--gngl:rgba(0,230,160,.3);
+  --am:#ffa94d;--am2:rgba(255,169,77,.10);--amgl:rgba(255,169,77,.3);
+  --rd:#ff6b7a;--rd2:rgba(255,107,122,.10);--vl:#b197fc;--pk:#f783ac;
+  --tx:#cde3f7;--tx2:#6a96b5;--tx3:#2e4f6a;--tx4:#162c42;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;--r:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;overflow-x:hidden;line-height:1.5}
+/* Ambient glow */
+body::before{content:'';position:fixed;top:-15%;left:50%;transform:translateX(-50%);
+  width:900px;height:500px;background:radial-gradient(ellipse,rgba(0,229,255,.03) 0%,transparent 65%);pointer-events:none;z-index:0}
+
+/* ── Header ── */
+.hdr{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;
+  padding:11px 24px;border-bottom:1px solid var(--bd);background:rgba(4,13,24,.92);backdrop-filter:blur(20px)}
+.logo{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.78rem;color:var(--cy);letter-spacing:.1em;font-weight:700}
+.logo-ring{width:30px;height:30px;border:1.5px solid var(--cy);border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:13px;animation:hbp 4s ease-in-out infinite}
+@keyframes hbp{0%,100%{box-shadow:0 0 0 0 var(--cyglow)}50%{box-shadow:0 0 14px 2px var(--cyglow)}}
+.hdr-r{display:flex;align-items:center;gap:6px}
+.badge{font-family:var(--mono);font-size:.55rem;letter-spacing:.22em;padding:3px 9px;border-radius:4px;
+  border:1px solid var(--bd);color:var(--tx3);transition:all .3s;text-transform:uppercase;white-space:nowrap}
+.badge.ok{border-color:var(--gn);color:var(--gn);box-shadow:0 0 7px var(--gngl);animation:blink 2s ease-in-out infinite}
+.badge.hot{border-color:var(--cy);color:var(--cy);box-shadow:0 0 7px var(--cyglow)}
+.badge.warn{border-color:var(--am);color:var(--am)}
+.badge.err{border-color:var(--rd);color:var(--rd)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.65}}
+
+/* ── Progress bar ── */
+.prog{height:2px;background:var(--bd);position:relative;z-index:199}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--cy),var(--vl),var(--pk));
+  transition:width .7s cubic-bezier(.4,0,.2,1);box-shadow:0 0 12px var(--cyglow)}
+
+/* ── Main ── */
+.main{position:relative;z-index:1;max-width:1020px;margin:0 auto;padding:44px 20px 90px}
+.step{display:none;animation:fup .38s ease}
+.step.on{display:block}
+@keyframes fup{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Type ── */
+.eyebrow{font-family:var(--mono);font-size:.56rem;letter-spacing:.28em;color:var(--cy);text-transform:uppercase;margin-bottom:7px}
+h1{font-size:2.9rem;font-weight:800;line-height:1.06;letter-spacing:-.03em;margin-bottom:16px}
+h2{font-size:1.85rem;font-weight:700;letter-spacing:-.02em;margin-bottom:12px}
+.lead{font-size:.94rem;color:var(--tx2);line-height:1.9;max-width:560px;margin-bottom:28px}
+.grad{background:linear-gradient(130deg,var(--cy),var(--vl) 60%,var(--pk));-webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;background-clip:text}
+
+/* ── Layout ── */
+.row{display:flex;gap:20px;align-items:flex-start}
+.col{flex:1;min-width:0}
+.col-w{flex:1.5;min-width:0}
+@media(max-width:660px){.row{flex-direction:column}}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:8px;
+  font-family:var(--sans);font-weight:600;font-size:.84rem;cursor:pointer;border:none;
+  transition:all .17s;white-space:nowrap;letter-spacing:.01em;text-decoration:none}
+.btn-cy{background:var(--cy);color:#000;font-weight:700}
+.btn-cy:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 8px 26px var(--cyglow)}
+.btn-gn{background:rgba(0,230,160,.15);color:var(--gn);border:1px solid rgba(0,230,160,.3)}
+.btn-gn:hover{background:rgba(0,230,160,.25);box-shadow:0 4px 16px var(--gngl)}
+.btn-out{background:transparent;color:var(--tx);border:1px solid var(--bd2)}
+.btn-out:hover{border-color:var(--cy);color:var(--cy);background:var(--cy2)}
+.btn-ghost{background:transparent;color:var(--tx2);border:1px solid var(--bd)}
+.btn-ghost:hover{color:var(--tx);border-color:var(--bd2)}
+.btn-am{background:var(--am2);color:var(--am);border:1px solid rgba(255,169,77,.25)}
+.btn-lg{padding:12px 26px;font-size:.9rem}
+.btn-sm{padding:6px 14px;font-size:.76rem}
+.btn:disabled{opacity:.25;pointer-events:none}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+
+/* ── Cards ── */
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:18px 20px}
+.card-cy{background:var(--cy2);border:1px solid var(--cy3);border-radius:var(--r);padding:16px 20px}
+.card-gn{background:var(--gn2);border:1px solid rgba(0,230,160,.18);border-radius:var(--r);padding:14px 18px}
+.card-am{background:var(--am2);border:1px solid rgba(255,169,77,.18);border-radius:var(--r);padding:14px 18px}
+.card-rd{background:var(--rd2);border:1px solid rgba(255,107,122,.2);border-radius:var(--r);padding:14px 18px}
+
+/* ── Feature tiles ── */
+.feats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+.feat{flex:1;min-width:155px;background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px;transition:all .2s}
+.feat:hover{border-color:var(--bd2);transform:translateY(-2px)}
+.fi{font-size:1.3rem;margin-bottom:9px}
+.fn{font-size:.83rem;font-weight:600;margin-bottom:3px}
+.fd{font-size:.73rem;color:var(--tx2);line-height:1.6}
+
+/* ── Camera ── */
+.cam-wrap{position:relative;border-radius:var(--r);overflow:hidden;background:#000;aspect-ratio:4/3;border:2px solid var(--bd);transition:border-color .3s}
+.cam-wrap.state-ref{border-color:var(--gn)}
+.cam-wrap.state-lens{border-color:var(--cy)}
+.cam-wrap.state-capturing{border-color:var(--am)}
+.cam-wrap.state-idle{border-color:var(--bd)}
+video{width:100%;height:100%;object-fit:cover;display:block}
+
+/* Scan overlay */
+.sf-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.sf{width:200px;height:200px;position:relative}
+.c1,.c2,.c3,.c4{position:absolute;width:30px;height:30px;border-color:var(--cy);border-style:solid;transition:border-color .3s}
+.c1{top:0;left:0;border-width:2px 0 0 2px}.c2{top:0;right:0;border-width:2px 2px 0 0}
+.c3{bottom:0;left:0;border-width:0 0 2px 2px}.c4{bottom:0;right:0;border-width:0 2px 2px 0}
+.sln{position:absolute;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cy),transparent);
+  animation:sc 2.4s ease-in-out infinite}
+@keyframes sc{0%{top:0;opacity:0}5%{opacity:1}90%{top:100%;opacity:1}100%{top:100%;opacity:0}}
+.state-ref .c1,.state-ref .c2,.state-ref .c3,.state-ref .c4{border-color:var(--gn)}
+.state-lens .c1,.state-lens .c2,.state-lens .c3,.state-lens .c4{border-color:var(--cy)}
+.state-capturing .c1,.state-capturing .c2,.state-capturing .c3,.state-capturing .c4{border-color:var(--am)}
+
+/* Focus & lens-in overlay bars */
+.cam-hud{position:absolute;bottom:0;left:0;right:0;padding:8px 10px;
+  background:linear-gradient(transparent,rgba(4,13,24,.82));display:flex;gap:8px;align-items:flex-end}
+.hud-item{flex:1;min-width:0}
+.hud-lbl{font-family:var(--mono);font-size:.5rem;letter-spacing:.18em;color:var(--tx3);margin-bottom:4px}
+.hud-track{height:3px;background:rgba(26,52,84,.8);border-radius:2px;overflow:hidden}
+.hud-fill{height:100%;border-radius:2px;transition:width .12s}
+.hud-val{font-family:var(--mono);font-size:.58rem;color:var(--tx2);margin-top:3px}
+.focus-fill{background:linear-gradient(90deg,var(--rd),var(--am),var(--gn))}
+.signal-fill{background:linear-gradient(90deg,var(--cy),var(--vl))}
+.lens-fill{background:var(--cy)}
+
+/* Analyze mask */
+.amask{position:absolute;inset:0;background:rgba(4,13,24,.88);display:none;
+  align-items:center;justify-content:center;flex-direction:column;gap:12px;border-radius:var(--r)}
+.amask.show{display:flex}
+.spin{width:28px;height:28px;border:2px solid var(--bd);border-top-color:var(--cy);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.atxt{font-family:var(--mono);font-size:.7rem;color:var(--cy);letter-spacing:.14em}
+.asub{font-size:.72rem;color:var(--tx2)}
+
+/* State banner on camera */
+.state-banner{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.18em;padding:5px 14px;border-radius:20px;
+  transition:all .3s;white-space:nowrap;pointer-events:none;backdrop-filter:blur(6px)}
+.sb-idle{background:rgba(26,52,84,.75);border:1px solid var(--bd);color:var(--tx3)}
+.sb-ref{background:rgba(0,230,160,.12);border:1px solid rgba(0,230,160,.35);color:var(--gn)}
+.sb-lens{background:rgba(0,229,255,.12);border:1px solid rgba(0,229,255,.35);color:var(--cy)}
+.sb-capturing{background:rgba(255,169,77,.12);border:1px solid rgba(255,169,77,.35);color:var(--am);animation:sbp .5s ease-in-out infinite}
+.sb-measured{background:rgba(0,230,160,.15);border:1px solid rgba(0,230,160,.4);color:var(--gn)}
+@keyframes sbp{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Waveform canvas */
+.wave-wrap{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;position:relative}
+#waveCanvas{display:block;width:100%;height:80px}
+.wave-legend{display:flex;gap:12px;padding:6px 10px;border-top:1px solid var(--bd);flex-wrap:wrap}
+.wleg{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:.53rem;color:var(--tx3)}
+.wdot{width:7px;height:7px;border-radius:50%}
+
+/* Pattern tabs */
+.ptabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.ptab{padding:5px 13px;border-radius:6px;font-size:.76rem;font-weight:500;cursor:pointer;
+  background:var(--s2);border:1px solid var(--bd);color:var(--tx2);transition:all .14s}
+.ptab.sel{background:var(--cy2);border-color:var(--cy3);color:var(--cy);font-weight:700}
+.ptab:hover:not(.sel){border-color:var(--bd2);color:var(--tx)}
+
+/* Pattern preview */
+.pat-wrap{background:#fff;border-radius:8px;overflow:hidden;border:1px solid var(--bd);aspect-ratio:4/3}
+#patCanvas{display:block;width:100%;height:100%}
+
+/* Upload zone */
+.upzone{border:2px dashed var(--bd2);border-radius:var(--r);padding:26px;text-align:center;cursor:pointer;transition:all .2s;background:var(--s1)}
+.upzone:hover,.upzone.drag{border-color:var(--cy);background:var(--cy2)}
+.upzone input{display:none}
+
+/* Slider */
+.srow{margin:10px 0}
+.srow label{display:flex;justify-content:space-between;font-size:.78rem;color:var(--tx2);margin-bottom:7px}
+.srow label span{font-family:var(--mono);color:var(--cy);font-weight:700}
+input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--bd);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--cy);cursor:pointer;box-shadow:0 0 8px var(--cyglow)}
+
+/* Eye selector */
+.eye-sel{display:flex;gap:8px;margin-bottom:14px}
+.eye-btn{flex:1;padding:12px;border-radius:var(--r);cursor:pointer;text-align:center;
+  background:var(--s2);border:1px solid var(--bd);color:var(--tx);transition:all .17s}
+.eye-btn.sel{border-color:var(--cy);background:var(--cy2);color:var(--cy)}
+.ebl{font-size:.78rem;font-weight:600;margin-top:3px}
+.ebs{font-size:.58rem;color:var(--tx3);font-family:var(--mono)}
+.eye-btn.sel .ebs{color:rgba(0,229,255,.6)}
+
+/* Diag boxes */
+.drow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.db{flex:1;min-width:70px;background:var(--s2);border:1px solid var(--bd);border-radius:7px;padding:8px 10px}
+.dl{font-family:var(--mono);font-size:.5rem;color:var(--tx3);letter-spacing:.18em;margin-bottom:4px}
+.dv{font-family:var(--mono);font-size:.84rem;color:var(--tx)}
+
+/* Power display */
+.pwr{font-family:var(--mono);font-weight:700;line-height:1}
+.pwr.neg{color:var(--rd)}.pwr.pos{color:var(--gn)}.pwr.zero{color:var(--tx2)}
+
+/* Confidence */
+.ctrack{height:3px;background:var(--bd);border-radius:2px}
+.cfill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--am),var(--gn));transition:width .8s ease}
+
+/* Eye result card */
+.eyec{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:18px 14px;text-align:center}
+.ecl{font-family:var(--mono);font-size:.52rem;letter-spacing:.2em;color:var(--tx3);margin-bottom:10px}
+
+/* Camera spec card */
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px;margin-top:10px}
+.spec-item{background:var(--s2);border:1px solid var(--bd);border-radius:7px;padding:9px 11px}
+.spec-label{font-family:var(--mono);font-size:.5rem;letter-spacing:.16em;color:var(--tx3);margin-bottom:3px}
+.spec-val{font-family:var(--mono);font-size:.78rem;color:var(--tx)}
+.spec-val.highlight{color:var(--cy)}
+
+/* Method badge */
+.method-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:5px;
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;margin-top:6px}
+.mb-focus{background:rgba(177,151,252,.1);border:1px solid rgba(177,151,252,.3);color:var(--vl)}
+.mb-freq{background:var(--cy2);border:1px solid var(--cy3);color:var(--cy)}
+
+/* Cycle counter */
+.cycle-counter{display:flex;align-items:center;gap:14px;padding:12px 16px;
+  background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);margin-top:10px}
+.cc-num{font-family:var(--mono);font-size:2rem;font-weight:700;color:var(--cy);line-height:1;min-width:50px;text-align:center}
+.cc-txt{font-size:.78rem;color:var(--tx2)}
+.cc-sub{font-size:.68rem;color:var(--tx3);font-family:var(--mono);margin-top:2px}
+
+/* RX table */
+.rx-tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.8rem;margin-top:10px}
+.rx-tbl th{font-size:.53rem;letter-spacing:.18em;text-transform:uppercase;color:var(--tx3);
+  padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd)}
+.rx-tbl td{padding:11px 10px;border-bottom:1px solid var(--bd)}
+.rx-tbl td:first-child{color:var(--tx2)}
+.td-sph{color:var(--cy);font-weight:700}
+.td-cyl{color:var(--am)}
+.td-ax{color:var(--vl)}
+
+/* Mode selector */
+.mode-sel{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.mode-card{flex:1;min-width:200px;background:var(--s1);border:2px solid var(--bd);border-radius:var(--r);
+  padding:18px 16px;cursor:pointer;transition:all .2s;position:relative}
+.mode-card:hover{border-color:var(--bd2)}
+.mode-card.sel{border-color:var(--cy);background:var(--cy2)}
+.mc-ico{font-size:1.8rem;margin-bottom:9px}
+.mc-nm{font-size:.88rem;font-weight:700;margin-bottom:3px}
+.mc-ds{font-size:.74rem;color:var(--tx2);line-height:1.6}
+.mode-card.sel .mc-ds{color:rgba(0,229,255,.7)}
+.mc-check{position:absolute;top:9px;right:9px;width:17px;height:17px;border-radius:50%;
+  border:1.5px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:.6rem;transition:all .2s}
+.mode-card.sel .mc-check{background:var(--cy);border-color:var(--cy);color:#000}
+
+/* Notification */
+.notif{position:fixed;bottom:20px;right:20px;z-index:999;padding:11px 17px;border-radius:8px;
+  font-size:.82rem;font-weight:500;transform:translateY(60px);opacity:0;
+  transition:all .3s cubic-bezier(.34,1.56,.64,1);max-width:280px;pointer-events:none;line-height:1.5}
+.notif.show{transform:translateY(0);opacity:1}
+.notif.info{background:var(--s3);border:1px solid var(--bd2);color:var(--tx)}
+.notif.ok{background:rgba(0,230,160,.1);border:1px solid rgba(0,230,160,.3);color:#6ee7b7}
+.notif.err{background:rgba(255,107,122,.1);border:1px solid rgba(255,107,122,.3);color:#fca5a5}
+.notif.warn{background:rgba(255,169,77,.08);border:1px solid rgba(255,169,77,.25);color:#fcd34d}
+
+/* Misc */
+.mt1{margin-top:4px}.mt2{margin-top:8px}.mt3{margin-top:12px}.mt4{margin-top:16px}.mt5{margin-top:20px}.mt6{margin-top:24px}.mt8{margin-top:32px}
+.mb2{margin-bottom:8px}.mb3{margin-bottom:12px}.mb4{margin-bottom:16px}.mb5{margin-bottom:20px}
+.tx2{color:var(--tx2)}.tx3{color:var(--tx3)}.cy{color:var(--cy)}.gn{color:var(--gn)}.am{color:var(--am)}.rd{color:var(--rd)}.vl{color:var(--vl)}
+.mono{font-family:var(--mono)}.small{font-size:.82rem}.smaller{font-size:.74rem}.smallest{font-size:.64rem}
+.tc{text-align:center}.div{height:1px;background:var(--bd);margin:14px 0}
+.err-box{display:none;background:var(--rd2);border:1px solid rgba(255,107,122,.22);color:#fca5a5;
+  border-radius:7px;padding:9px 13px;font-size:.78rem;margin-top:8px}
+.sdot{display:inline-block;width:6px;height:6px;background:var(--gn);border-radius:50%;margin-right:5px;box-shadow:0 0 6px var(--gn)}
+#capCanvas{display:none}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo">
+    <div class="logo-ring">👁</div>
+    OPTISCAN PRO
+  </div>
+  <div class="hdr-r">
+    <span class="badge" id="sBadge">STANDBY</span>
+    <span class="badge" id="methodBadge" style="display:none"></span>
+    <span class="badge" style="color:var(--tx4);border-color:var(--bd)">v5.0</span>
+  </div>
+</header>
+<div class="prog"><div class="prog-fill" id="pBar" style="width:0%"></div></div>
+
+<main class="main">
+
+<!-- WELCOME -->
+<div class="step on" id="step-welcome">
+  <div class="eyebrow">Spectacle Power Analyzer — v5.0</div>
+  <h1>Lens Power<br><span class="grad">Wave Scanner</span></h1>
+  <p class="lead">Point your back camera at a pattern, then wave your glasses in front — the app auto-detects each lens pass and builds an averaged reading. No buttons needed mid-scan.</p>
+
+  <div class="feats">
+    <div class="feat"><div class="fi">🌊</div><div class="fn">Wave Mode</div><div class="fd">Just wave glasses in front of camera. App auto-detects lens-in/out cycles and averages results automatically</div></div>
+    <div class="feat"><div class="fi">🎯</div><div class="fn">Auto Focus-Distance</div><div class="fd">Uses camera autofocus API (if available) to calculate power from focus shift — no distance setting needed</div></div>
+    <div class="feat"><div class="fi">📡</div><div class="fn">Camera Specs</div><div class="fd">Reads focal length, sensor capabilities, focus distance range, and uses them to improve accuracy</div></div>
+    <div class="feat"><div class="fi">🔬</div><div class="fn">FFT + Autocorrelation</div><div class="fd">Dual-method hybrid analysis with IQR outlier rejection across multiple wave cycles</div></div>
+    <div class="feat"><div class="fi">💊</div><div class="fn">Sphere + Cylinder</div><div class="fd">Independently analyzes H and V spatial frequencies to detect astigmatism (cylindrical power + axis)</div></div>
+    <div class="feat"><div class="fi">📤</div><div class="fn">Export</div><div class="fd">Download full report as JSON or CSV, or print a clinical prescription sheet</div></div>
+  </div>
+
+  <div class="card-cy mb5">
+    <strong class="small">📋 What you need:</strong>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">
+      <span style="background:var(--cy2);border:1px solid var(--cy3);border-radius:5px;padding:3px 10px;font-size:.76rem;color:#67e8f9">Spectacle glasses to test</span>
+      <span style="background:var(--cy2);border:1px solid var(--cy3);border-radius:5px;padding:3px 10px;font-size:.76rem;color:#67e8f9">Phone with back camera</span>
+      <span style="background:var(--cy2);border:1px solid var(--cy3);border-radius:5px;padding:3px 10px;font-size:.76rem;color:#67e8f9">Good even lighting</span>
+      <span style="background:var(--cy2);border:1px solid var(--cy3);border-radius:5px;padding:3px 10px;font-size:.76rem;color:#67e8f9">Ruler (optional, improves accuracy)</span>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-cy btn-lg" id="btnStart">▶ Start Wave Scan</button>
+    <button class="btn btn-out" id="btnClassic">📷 Classic Mode</button>
+    <button class="btn btn-ghost" id="btnUpload">📁 Offline Image Analysis</button>
+  </div>
+</div>
+
+<!-- SETUP -->
+<div class="step" id="step-setup">
+  <div class="eyebrow">Step 1 — Setup</div>
+  <h2>Configure Scan</h2>
+
+  <div class="row">
+    <div class="col-w">
+      <!-- Pattern -->
+      <div class="eyebrow mb2">Reference Pattern</div>
+      <div class="ptabs">
+        <div class="ptab sel" data-pat="checker">Checkerboard</div>
+        <div class="ptab" data-pat="dots">Dots Grid</div>
+        <div class="ptab" data-pat="sine">Sine Grating</div>
+        <div class="ptab" data-pat="rings">Concentric</div>
+        <div class="ptab" data-pat="stripes">Stripes</div>
+        <div class="ptab" data-pat="upload">Upload ↑</div>
+      </div>
+      <div class="pat-wrap" id="patWrap">
+        <canvas id="patCanvas" width="640" height="480"></canvas>
+      </div>
+      <div class="upzone mt2" id="upPat" style="display:none">
+        <input type="file" id="patFile" accept="image/*">
+        <div style="font-size:1.8rem;margin-bottom:6px">📁</div>
+        <div class="small tx2">Click or drag your reference image</div>
+        <div class="smallest tx3 mt1">JPG, PNG, WebP, BMP</div>
+      </div>
+      <div class="btn-row mt2">
+        <button class="btn btn-ghost btn-sm" id="btnDlPat">⬇ Download Pattern</button>
+        <button class="btn btn-ghost btn-sm" id="btnFSPat">⛶ Fullscreen</button>
+      </div>
+      <div class="card-am mt4 smallest am">⚠ Show this pattern on a second screen or print it. Point your camera at it from ~40–80 cm away during scanning.</div>
+    </div>
+
+    <div class="col">
+      <!-- Eye -->
+      <div class="card">
+        <div class="eyebrow">Scan Eye</div>
+        <div class="eye-sel mt3">
+          <div class="eye-btn sel" id="eyeBtnR" onclick="App.eye('right')">
+            <div style="font-size:1.1rem">👁</div><div class="ebl">Right</div><div class="ebs">OD</div>
+          </div>
+          <div class="eye-btn" id="eyeBtnL" onclick="App.eye('left')">
+            <div style="font-size:1.1rem">👁</div><div class="ebl">Left</div><div class="ebs">OS</div>
+          </div>
+        </div>
+        <div class="srow mt4">
+          <label>Lens-to-camera distance <span id="distLbl">50 mm</span></label>
+          <input type="range" id="distSlider" min="10" max="200" value="50" step="5">
+        </div>
+        <p class="smallest tx3 mt1">Used if camera focus API is unavailable. Typical: 20–40 mm (phone), 40–80 mm (laptop). Measure with ruler.</p>
+      </div>
+
+      <!-- Camera specs (populated after camera starts) -->
+      <div class="card mt4" id="camSpecCard" style="display:none">
+        <div class="eyebrow">Camera Capabilities</div>
+        <div class="spec-grid" id="specGrid"></div>
+        <div class="smallest tx3 mt3" id="focusApiNote"></div>
+      </div>
+
+      <div class="card mt4" style="background:var(--bg);border-color:var(--bd)">
+        <div class="eyebrow mb2">Setup Diagram</div>
+        <pre id="setupDiag" style="font-family:var(--mono);font-size:.58rem;color:var(--cy);line-height:2;white-space:pre;display:inline-block">  ┌──────────────────┐
+  │  PATTERN SCREEN  │
+  └────────┬─────────┘
+           │
+      ┌────┴────┐
+      │  LENS   │  ← wave glasses here
+      └────┬────┘
+           │ ← 50 mm
+      ┌────┴────┐
+      │  CAMERA │  ← back camera facing screen
+      └─────────┘</pre>
+      </div>
+
+      <button class="btn btn-cy mt5" id="btnGoScan" style="width:100%">Start Scanning →</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAVE SCAN -->
+<div class="step" id="step-scan">
+  <div class="eyebrow">Step 2 — Live Scan</div>
+  <h2>Scanning <span id="scanEyeLbl">Right</span> Eye <span class="smaller tx2" id="scanEyeCode">(OD)</span></h2>
+
+  <div class="row">
+    <div class="col-w">
+      <!-- Camera -->
+      <div class="cam-wrap state-idle" id="mainCamWrap">
+        <video id="mainVid" autoplay playsinline muted></video>
+        <div class="sf-ov">
+          <div class="sf"><div class="c1"></div><div class="c2"></div><div class="c3"></div><div class="c4"></div><div class="sln"></div></div>
+        </div>
+        <div class="state-banner sb-idle" id="stateBanner">INITIALIZING…</div>
+        <div class="cam-hud">
+          <div class="hud-item">
+            <div class="hud-lbl">FOCUS</div>
+            <div class="hud-track"><div class="hud-fill focus-fill" id="focFill" style="width:0%"></div></div>
+            <div class="hud-val" id="focVal">—</div>
+          </div>
+          <div class="hud-item">
+            <div class="hud-lbl">SIGNAL</div>
+            <div class="hud-track"><div class="hud-fill signal-fill" id="sigFill" style="width:0%"></div></div>
+            <div class="hud-val" id="sigVal">—</div>
+          </div>
+          <div class="hud-item">
+            <div class="hud-lbl">LENS DETECT</div>
+            <div class="hud-track"><div class="hud-fill lens-fill" id="lnsFill" style="width:0%"></div></div>
+            <div class="hud-val" id="lnsVal">—</div>
+          </div>
+          <div class="hud-item" id="focDistHud" style="display:none">
+            <div class="hud-lbl">FOCUS DIST</div>
+            <div class="hud-track"><div class="hud-fill" style="background:var(--vl)" id="fdFill" style="width:50%"></div></div>
+            <div class="hud-val" id="fdVal">—</div>
+          </div>
+        </div>
+        <div class="amask" id="capMask">
+          <div class="spin"></div>
+          <div class="atxt" id="capTxt">CAPTURING…</div>
+          <div class="asub" id="capSub">Hold still</div>
+        </div>
+      </div>
+
+      <!-- Waveform -->
+      <div class="wave-wrap mt3">
+        <canvas id="waveCanvas" height="80"></canvas>
+        <div class="wave-legend">
+          <div class="wleg"><div class="wdot" style="background:rgba(0,230,160,.5)"></div>Reference baseline</div>
+          <div class="wleg"><div class="wdot" style="background:rgba(0,229,255,.5)"></div>Lens detected</div>
+          <div class="wleg"><div class="wdot" style="background:var(--am)"></div>Measurement captured</div>
+          <div class="wleg"><div class="wdot" style="background:var(--vl)"></div>Focus distance (if avail.)</div>
+        </div>
+      </div>
+
+      <div class="btn-row mt2">
+        <button class="btn btn-ghost btn-sm" id="btnFlipCam">↔ Flip Camera</button>
+        <button class="btn btn-ghost btn-sm" id="btnManCapRef">📸 Manual Ref</button>
+        <button class="btn btn-ghost btn-sm" id="btnManCapLens">🔬 Manual Lens</button>
+        <button class="btn btn-ghost btn-sm" id="btnBackSetup">← Setup</button>
+      </div>
+      <div id="errScan" class="err-box"></div>
+    </div>
+
+    <div class="col">
+      <!-- Instructions -->
+      <div class="card-gn" id="instructionCard">
+        <div class="eyebrow gn mb1" id="instrTitle">INITIALIZING</div>
+        <div class="small" id="instrBody" style="line-height:1.75"></div>
+      </div>
+
+      <!-- Cycle counter -->
+      <div class="cycle-counter mt3">
+        <div class="cc-num" id="cycleNum">0</div>
+        <div>
+          <div class="cc-txt">measurements captured</div>
+          <div class="cc-sub" id="cycleNeeded">Wave 3× for a reliable result</div>
+        </div>
+      </div>
+
+      <!-- Running average -->
+      <div class="card mt3" id="runCard" style="display:none">
+        <div class="eyebrow">Running Average</div>
+        <div class="pwr zero mt3 tc" id="runPwr" style="font-size:2.4rem">—</div>
+        <div class="tc mt1 tx2 small" id="runCls">—</div>
+        <div class="drow mt3">
+          <div class="db"><div class="dl">SPHERE</div><div class="dv cy" id="runSph">—</div></div>
+          <div class="db"><div class="dl">CYLINDER</div><div class="dv am" id="runCyl">—</div></div>
+          <div class="db"><div class="dl">AXIS</div><div class="dv vl" id="runAx">—</div></div>
+          <div class="db"><div class="dl">MAGNIF</div><div class="dv" id="runMag">—</div></div>
+        </div>
+        <div class="mt3">
+          <div class="smallest tx3 mb2" style="display:flex;justify-content:space-between">
+            <span>SIGNAL CONFIDENCE</span><span id="runConf">—</span>
+          </div>
+          <div class="ctrack"><div class="cfill" id="runCfill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Eye progress -->
+      <div class="mt4">
+        <div class="eyebrow mb2">Scan Progress</div>
+        <div style="display:flex;gap:7px">
+          <div class="eyec" style="flex:1"><div class="ecl">RIGHT (OD)</div><div class="pwr zero" id="progR" style="font-size:1.5rem">—</div></div>
+          <div class="eyec" style="flex:1"><div class="ecl">LEFT (OS)</div><div class="pwr zero" id="progL" style="font-size:1.5rem">—</div></div>
+        </div>
+      </div>
+
+      <div class="btn-row mt4" id="nextBtns" style="display:none">
+        <button class="btn btn-out" id="btnSwitchEye">Switch Eye →</button>
+        <button class="btn btn-cy" id="btnFinish">View Results →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD ANALYSIS -->
+<div class="step" id="step-upload">
+  <div class="eyebrow">Offline Analysis</div>
+  <h2>Analyze Uploaded Images</h2>
+  <p class="lead" style="margin-bottom:16px">Upload two photos taken in the same conditions: one through the spectacle lens, one without. The analyzer compares spatial frequencies to compute magnification and power.</p>
+  <div class="row">
+    <div class="col">
+      <div class="eyebrow mb2">Image A — Through Lens</div>
+      <div class="upzone" id="upLens">
+        <input type="file" id="lensFile" accept="image/*">
+        <div style="font-size:1.8rem;margin-bottom:6px">🔬</div>
+        <div class="small tx2">Photo taken through spectacle lens</div>
+        <div class="smallest tx3 mt1">Click or drag & drop</div>
+      </div>
+      <canvas id="lensPreviewC" style="display:none;width:100%;border-radius:8px;margin-top:8px;max-height:160px;object-fit:cover"></canvas>
+    </div>
+    <div class="col">
+      <div class="eyebrow mb2">Image B — Reference (No Lens)</div>
+      <div class="upzone" id="upRef">
+        <input type="file" id="refFile" accept="image/*">
+        <div style="font-size:1.8rem;margin-bottom:6px">📷</div>
+        <div class="small tx2">Same scene, without any lens</div>
+        <div class="smallest tx3 mt1">Click or drag & drop</div>
+      </div>
+      <canvas id="refPreviewC" style="display:none;width:100%;border-radius:8px;margin-top:8px;max-height:160px;object-fit:cover"></canvas>
+    </div>
+  </div>
+  <div class="row mt5">
+    <div class="col">
+      <div class="srow">
+        <label>Lens-to-camera distance <span id="upDistLbl">50 mm</span></label>
+        <input type="range" id="upDist" min="10" max="200" value="50" step="5">
+      </div>
+      <div class="btn-row mt3">
+        <button class="btn btn-cy" id="btnAnalyzeUp" disabled>🔬 Analyze</button>
+        <button class="btn btn-ghost" id="btnUpBack">← Back</button>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card" id="upResult" style="display:none">
+        <div class="eyebrow">Result</div>
+        <div class="pwr zero mt3 tc" id="upPwr" style="font-size:2.4rem">—</div>
+        <div class="tc mt1 tx2 small" id="upCls">—</div>
+        <div class="drow mt3">
+          <div class="db"><div class="dl">SPHERE</div><div class="dv cy" id="upSph">—</div></div>
+          <div class="db"><div class="dl">CYLINDER</div><div class="dv am" id="upCyl">—</div></div>
+          <div class="db"><div class="dl">MAGNIF</div><div class="dv" id="upMag">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div class="step" id="step-results">
+  <div class="eyebrow">Scan Complete ✓</div>
+  <h2>Prescription Results</h2>
+
+  <div class="row mt5">
+    <div class="col-w">
+      <div class="card">
+        <div class="eyebrow">Clinical Prescription</div>
+        <table class="rx-tbl mt3">
+          <thead><tr><th>Eye</th><th>Sphere</th><th>Cylinder</th><th>Axis</th><th>Classification</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Right (OD)</td>
+              <td class="td-sph" id="rxRS">—</td><td class="td-cyl" id="rxRC">—</td><td class="td-ax" id="rxRA">—</td>
+              <td class="tx2" id="rxRCl" style="font-family:var(--sans);font-size:.75rem">—</td>
+            </tr>
+            <tr>
+              <td>Left (OS)</td>
+              <td class="td-sph" id="rxLS">—</td><td class="td-cyl" id="rxLC">—</td><td class="td-ax" id="rxLA">—</td>
+              <td class="tx2" id="rxLCl" style="font-family:var(--sans);font-size:.75rem">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card mt4">
+        <div class="eyebrow">Measurement Diagnostics</div>
+        <div class="drow mt3">
+          <div class="db"><div class="dl">R MAGNIF</div><div class="dv" id="dRM">—</div></div>
+          <div class="db"><div class="dl">L MAGNIF</div><div class="dv" id="dLM">—</div></div>
+          <div class="db"><div class="dl">LENS DIST</div><div class="dv" id="dDst">—</div></div>
+          <div class="db"><div class="dl">R FOCAL</div><div class="dv" id="dRF">—</div></div>
+          <div class="db"><div class="dl">L FOCAL</div><div class="dv" id="dLF">—</div></div>
+          <div class="db"><div class="dl">CYCLES</div><div class="dv" id="dCyc">—</div></div>
+          <div class="db"><div class="dl">METHOD</div><div class="dv cy" id="dMeth">—</div></div>
+          <div class="db"><div class="dl">CONF</div><div class="dv" id="dCnf">—</div></div>
+        </div>
+      </div>
+
+      <div class="btn-row mt4">
+        <button class="btn btn-out btn-sm" id="btnExpJSON">⬇ JSON</button>
+        <button class="btn btn-out btn-sm" id="btnExpCSV">⬇ CSV</button>
+        <button class="btn btn-out btn-sm" id="btnPrint">🖨 Print</button>
+        <button class="btn btn-ghost btn-sm" id="btnNewScan">↺ New Scan</button>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="eyec mb3">
+        <div class="ecl">RIGHT EYE (OD)</div>
+        <div class="pwr zero" id="finR" style="font-size:2rem">—</div>
+        <div class="smallest tx2 mt2" id="finRCl">—</div>
+        <div class="smallest am mt1" id="finRCy"></div>
+      </div>
+      <div class="eyec">
+        <div class="ecl">LEFT EYE (OS)</div>
+        <div class="pwr zero" id="finL" style="font-size:2rem">—</div>
+        <div class="smallest tx2 mt2" id="finLCl">—</div>
+        <div class="smallest am mt1" id="finLCy"></div>
+      </div>
+      <div class="smallest tx3 tc mt5" style="line-height:1.9;padding:0 8px">
+        ⚠ Approximate estimate (±0.25–0.50 D typical). Accuracy depends on camera quality, lighting conditions, and lens distance. Always consult a licensed optometrist for clinical prescriptions.
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<canvas id="capCanvas" style="display:none"></canvas>
+<div id="notif" class="notif"></div>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════
+   CONFIG
+══════════════════════════════════════════ */
+const C = {
+  FRAMES: 7,           // frames per measurement
+  DETECT_FRAMES: 3,    // frames for real-time detection
+  MIN_D: -25, MAX_D: 25,
+  PREC: 0.25,
+  POLL_MS: 160,        // real-time polling interval
+  STABLE_COUNT: 6,     // consecutive stable readings to lock state
+  LENS_THRESH: 0.045,  // 4.5% period change triggers lens detection
+  CV_THRESH: 0.038,    // coefficient of variation threshold for "stable"
+  MIN_CYCLES: 3,       // minimum recommended cycles
+};
+
+/* ══════════════════════════════════════════
+   PATTERN MODULE
+══════════════════════════════════════════ */
+const Pat = {
+  spacing: 44,
+
+  render(canvas, type) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height, s = this.spacing;
+    ctx.clearRect(0, 0, w, h);
+    switch (type) {
+      case 'checker': this._checker(ctx, w, h, s); break;
+      case 'dots':    this._dots(ctx, w, h, s); break;
+      case 'sine':    this._sine(ctx, w, h, s); break;
+      case 'rings':   this._rings(ctx, w, h, s); break;
+      case 'stripes': this._stripes(ctx, w, h, s); break;
+      default: this._checker(ctx, w, h, s);
+    }
+  },
+  _checker(c, w, h, s) {
+    c.fillStyle = '#fff'; c.fillRect(0,0,w,h);
+    c.fillStyle = '#000';
+    for (let y=0; y<h; y+=s) for (let x=0; x<w; x+=s)
+      if ((~~(x/s)+~~(y/s))%2===0) c.fillRect(x,y,s,s);
+  },
+  _dots(c, w, h, s) {
+    c.fillStyle = '#fff'; c.fillRect(0,0,w,h);
+    c.strokeStyle = '#ccc'; c.lineWidth = 0.5;
+    for (let y=s; y<h; y+=s) { c.beginPath(); c.moveTo(0,y); c.lineTo(w,y); c.stroke(); }
+    for (let x=s; x<w; x+=s) { c.beginPath(); c.moveTo(x,0); c.lineTo(x,h); c.stroke(); }
+    const r = Math.max(2.5, s*0.1);
+    c.fillStyle = '#111';
+    for (let y=s; y<h; y+=s) for (let x=s; x<w; x+=s) { c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.fill(); }
+  },
+  _sine(c, w, h, s) {
+    const id = c.createImageData(w,h), d = id.data, f = (2*Math.PI)/s;
+    for (let y=0; y<h; y++) for (let x=0; x<w; x++) {
+      const v = ~~(((Math.sin(x*f)+1)/2)*((Math.sin(y*f)+1)/2)*255);
+      const i = (y*w+x)*4; d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+    }
+    c.putImageData(id, 0, 0);
+  },
+  _rings(c, w, h, s) {
+    c.fillStyle = '#fff'; c.fillRect(0,0,w,h);
+    const cx=w/2, cy=h/2, mx=Math.sqrt(cx*cx+cy*cy)+s;
+    for (let r=s*.5; r<mx; r+=s) {
+      c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2);
+      c.strokeStyle = ~~(r/s)%2===0?'#000':'#f0f0f0'; c.lineWidth=s*.42; c.stroke();
+    }
+  },
+  _stripes(c, w, h, s) {
+    c.fillStyle = '#fff'; c.fillRect(0,0,w,h); c.fillStyle='#000';
+    for (let y=0; y<h; y+=s) c.fillRect(0,y,w,s/2);
+  },
+  loadFile(file, canvas, cb) {
+    const r = new FileReader();
+    r.onload = e => { const img = new Image(); img.onload = () => { canvas.width=img.width; canvas.height=img.height; canvas.getContext('2d').drawImage(img,0,0); if(cb)cb(); }; img.src=e.target.result; };
+    r.readAsDataURL(file);
+  },
+  download(canvas) {
+    const a=document.createElement('a'); a.download='optiscan-pattern.png'; a.href=canvas.toDataURL(); a.click();
+  }
+};
+
+/* ══════════════════════════════════════════
+   FFT (Cooley-Tukey radix-2)
+══════════════════════════════════════════ */
+const FFT = {
+  np2(n){let p=1; while(p<n)p<<=1; return p;},
+  fft(re, im) {
+    const n=re.length; let j=0;
+    for (let i=1;i<n;i++){let b=n>>1; for(;j&b;b>>=1)j^=b; j^=b; if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}}
+    for (let l=2;l<=n;l<<=1){const a=-2*Math.PI/l,wr=Math.cos(a),wi=Math.sin(a);
+      for(let i=0;i<n;i+=l){let cr=1,ci=0;
+        for(let k=0;k<l>>1;k++){const ur=re[i+k],ui=im[i+k],vr=re[i+k+(l>>1)]*cr-im[i+k+(l>>1)]*ci,vi=re[i+k+(l>>1)]*ci+im[i+k+(l>>1)]*cr;
+          re[i+k]=ur+vr;im[i+k]=ui+vi;re[i+k+(l>>1)]=ur-vr;im[i+k+(l>>1)]=ui-vi;
+          const nr=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=nr;}}}
+  },
+  period(sig, minP=4) {
+    const n=this.np2(sig.length); const re=new Float64Array(n),im=new Float64Array(n);
+    let mu=0; for(let i=0;i<sig.length;i++)mu+=sig[i]; mu/=sig.length;
+    for(let i=0;i<sig.length;i++) re[i]=(sig[i]-mu)*.5*(1-Math.cos(2*Math.PI*i/(sig.length-1)));
+    this.fft(re,im);
+    const maxK=~~(n/minP); let bk=0,bp=0;
+    for(let k=1;k<=Math.min(maxK,n/2-1);k++){const p=re[k]**2+im[k]**2; if(p>bp){bp=p;bk=k;}}
+    if(!bk)return null;
+    const p0=bk>0?re[bk-1]**2+im[bk-1]**2:0,p1=bp,p2=bk<n/2-1?re[bk+1]**2+im[bk+1]**2:0;
+    const den=p0-2*p1+p2; const off=den?(p0-p2)/(2*den):0;
+    return {period:n/(bk+off), strength:Math.sqrt(bp)/(sig.length*.5)};
+  }
+};
+
+/* ══════════════════════════════════════════
+   IMAGE PROCESSOR
+══════════════════════════════════════════ */
+const IP = {
+  toGray(id) {
+    const {data:d,width:w,height:h}=id; const g=new Float32Array(w*h);
+    for(let i=0;i<w*h;i++){const j=i*4; g[i]=0.2126*d[j]+0.7152*d[j+1]+0.0722*d[j+2];}
+    return {data:g,width:w,height:h};
+  },
+  lapVar(id) {
+    const g=this.toGray(id); const{data,width:w,height:h}=g;
+    const mx=.25,x0=~~(w*mx),x1=~~(w*(1-mx)),y0=~~(h*mx),y1=~~(h*(1-mx));
+    let s=0,n=0;
+    for(let y=y0+1;y<y1-1;y+=2)for(let x=x0+1;x<x1-1;x+=2){
+      const l=-4*data[y*w+x]+data[(y-1)*w+x]+data[(y+1)*w+x]+data[y*w+x-1]+data[y*w+x+1];
+      s+=l*l;n++;
+    }
+    return n?s/n:0;
+  },
+  // Fast 1D autocorrelation period for a direction ('h' or 'v')
+  acPer(gray, dir) {
+    const{data,width:w,height:h}=gray;
+    const mx=.15,x0=~~(w*mx),x1=~~(w*(1-mx)),y0=~~(h*mx),y1=~~(h*(1-mx));
+    const mL=dir==='h'?Math.min(~~(w*.4),300):Math.min(~~(h*.4),300);
+    const acc=new Float64Array(mL); let cnt=0;
+    if(dir==='h'){
+      for(let y=y0;y<y1;y+=2){
+        const b=y*w; let mu=0;
+        for(let x=x0;x<x1;x++)mu+=data[b+x]; mu/=(x1-x0);
+        let s2=0; for(let x=x0;x<x1;x++)s2+=(data[b+x]-mu)**2;
+        if(s2<1)continue; s2/=(x1-x0);
+        for(let lag=1;lag<mL;lag++){let s=0,n=0;for(let x=x0;x<x1-lag;x++){s+=(data[b+x]-mu)*(data[b+x+lag]-mu);n++;} acc[lag]+=s/(n*s2);}
+        cnt++;
+      }
+    } else {
+      for(let x=x0;x<x1;x+=2){
+        let mu=0; for(let y=y0;y<y1;y++)mu+=data[y*w+x]; mu/=(y1-y0);
+        let s2=0; for(let y=y0;y<y1;y++)s2+=(data[y*w+x]-mu)**2;
+        if(s2<1)continue; s2/=(y1-y0);
+        for(let lag=1;lag<mL;lag++){let s=0,n=0;for(let y=y0;y<y1-lag;y++){s+=(data[y*w+x]-mu)*(data[(y+lag)*w+x]-mu);n++;} acc[lag]+=s/(n*s2);}
+        cnt++;
+      }
+    }
+    if(!cnt)return null;
+    for(let i=0;i<mL;i++)acc[i]/=cnt;
+    for(let i=4;i<mL-1;i++){
+      if(acc[i]>acc[i-1]&&acc[i]>=acc[i+1]&&acc[i]>.022){
+        const a=acc[i-1],b=acc[i],c2=acc[i+1],den2=a-2*b+c2;
+        return{period:i+(den2?(a-c2)/(2*den2):0),strength:b};
+      }
+    }
+    return null;
+  },
+  // FFT-based period
+  fftPer(gray, dir) {
+    const{data,width:w,height:h}=gray;
+    const mx=.15,x0=~~(w*mx),x1=~~(w*(1-mx)),y0=~~(h*mx),y1=~~(h*(1-mx));
+    const ps=[],ss=[];
+    if(dir==='h'){
+      const len=x1-x0; for(let y=y0;y<y1;y+=3){
+        const row=new Float64Array(len); for(let x=0;x<len;x++)row[x]=data[y*w+x0+x];
+        const r=FFT.period(row,4); if(r&&r.period>3){ps.push(r.period);ss.push(r.strength);}
+      }
+    } else {
+      const len=y1-y0; for(let x=x0;x<x1;x+=3){
+        const col=new Float64Array(len); for(let y=0;y<len;y++)col[y]=data[(y+y0)*w+x];
+        const r=FFT.period(col,4); if(r&&r.period>3){ps.push(r.period);ss.push(r.strength);}
+      }
+    }
+    if(!ps.length)return null;
+    ps.sort((a,b)=>a-b);
+    return{period:ps[~~(ps.length/2)],strength:ss.reduce((s,v)=>s+v,0)/ss.length};
+  },
+  // Hybrid: FFT + autocorrelation
+  analyze(id) {
+    const gray=this.toGray(id);
+    const fuse=(ac,fft)=>{
+      if(ac&&fft){const ok=Math.abs(ac.period-fft.period)<7;return{period:ok?(ac.period*ac.strength+fft.period*fft.strength*2)/(ac.strength+fft.strength*2):fft.period,strength:(ac.strength+fft.strength)/2};}
+      return ac||fft||null;
+    };
+    const h=fuse(this.acPer(gray,'h'),this.fftPer(gray,'h'));
+    const v=fuse(this.acPer(gray,'v'),this.fftPer(gray,'v'));
+    if(!h||!v)return{ok:false,err:'No repeating pattern detected'};
+    return{ok:true,hPeriod:h.period,vPeriod:v.period,avgPeriod:(h.period+v.period)/2,strength:(h.strength+v.strength)/2};
+  },
+  // Faster single-row scan for real-time detection
+  fastPeriod(id) {
+    const gray=this.toGray(id);
+    const{data,width:w,height:h}=gray;
+    const y0=~~(h*.4),y1=~~(h*.6);
+    const r=this.acPer({data,width:w,height:h},'h');
+    return r;
+  }
+};
+
+/* ══════════════════════════════════════════
+   CAMERA MODULE
+══════════════════════════════════════════ */
+const Cam = {
+  stream:null, canvas:null, facing:'environment',
+  pollTimer:null, imgCap:null, specs:{},
+
+  init(canvas){this.canvas=canvas;},
+
+  async start(vid, mode){
+    this.stop();
+    this.facing=mode||'environment';
+    try{
+      this.stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:this.facing},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:'continuous'}}
+      });
+      vid.srcObject=this.stream;
+      await new Promise((res,rej)=>{vid.onloadedmetadata=res;vid.onerror=rej;setTimeout(res,4000);});
+      vid.play();
+      await this.readSpecs();
+      return true;
+    }catch(e){
+      console.error(e);
+      if(this.facing!=='user')return this.start(vid,'user');
+      return false;
+    }
+  },
+
+  async readSpecs(){
+    if(!this.stream)return;
+    const track=this.stream.getVideoTracks()[0];
+    if(!track)return;
+    const s=track.getSettings();
+    const caps=track.getCapabilities?track.getCapabilities():{};
+    this.specs={
+      width:s.width,height:s.height,fps:Math.round(s.frameRate||0),
+      facing:s.facingMode||'unknown',
+      focalLength:s.focalLength||null,
+      focusDistance:s.focusDistance||null,
+      zoom:s.zoom||null,
+      focusMode:s.focusMode||null,
+      focusDistanceCaps:caps.focusDistance||null,
+      zoomCaps:caps.zoom||null,
+    };
+    // Try ImageCapture for extended specs
+    try{
+      this.imgCap=new ImageCapture(track);
+      const pc=await this.imgCap.getPhotoCapabilities();
+      if(pc.imageHeight)this.specs.maxPhotoH=pc.imageHeight.max;
+      if(pc.imageWidth)this.specs.maxPhotoW=pc.imageWidth.max;
+    }catch(e){this.imgCap=null;}
+    // Estimate field-of-view pixel density from focal length if available
+    if(this.specs.focalLength&&this.specs.width){
+      // Rough estimate: typical phone sensor ~3.7mm x 2.8mm for main cam
+      const sensorW=3.7; // mm, typical crop estimate
+      this.specs.estPxPerMM=(this.specs.width/sensorW)*(this.specs.focalLength/50);
+    }
+  },
+
+  getFocusDistanceLive(){
+    if(!this.stream)return null;
+    try{
+      const t=this.stream.getVideoTracks()[0];
+      const s=t.getSettings();
+      return s.focusDistance||null;
+    }catch(e){return null;}
+  },
+
+  async setFocusMode(mode){
+    if(!this.stream)return;
+    try{
+      const t=this.stream.getVideoTracks()[0];
+      await t.applyConstraints({advanced:[{focusMode:mode}]});
+    }catch(e){}
+  },
+
+  capture(vid){
+    const v=vid||document.querySelector('video');
+    const w=v.videoWidth||640,h=v.videoHeight||480;
+    this.canvas.width=w; this.canvas.height=h;
+    const ctx=this.canvas.getContext('2d');
+    ctx.drawImage(v,0,0,w,h);
+    return ctx.getImageData(0,0,w,h);
+  },
+
+  flip(vid){return this.start(vid,this.facing==='environment'?'user':'environment');},
+
+  stop(){
+    this.stopPoll();
+    if(this.stream){this.stream.getTracks().forEach(t=>t.stop());this.stream=null;}
+    this.imgCap=null;
+  },
+
+  startPoll(cb){
+    this.stopPoll();
+    this.pollTimer=setInterval(cb,C.POLL_MS);
+  },
+  stopPoll(){if(this.pollTimer){clearInterval(this.pollTimer);this.pollTimer=null;}}
+};
+
+/* ══════════════════════════════════════════
+   WAVE DETECTOR STATE MACHINE
+══════════════════════════════════════════ */
+const Wave = {
+  // States
+  S:{IDLE:'idle',REF_INIT:'ref_init',REF_READY:'ref_ready',LENS_ENTERING:'lens_entering',LENS_STABLE:'lens_stable',CAPTURING:'capturing',CYCLE_DONE:'cycle_done'},
+  state:'idle',
+  refPeriod:null,    // baseline period (no lens)
+  refFocusDist:null, // baseline focus distance (if API available)
+  stableCount:0,
+  lensStableCount:0,
+  periodHistory:[],  // rolling buffer: {period, strength, t, focDist, lap}
+  measurements:[],   // array of raw per-cycle results
+  lastCapT:0,
+  MIN_CAP_GAP:1200,  // ms between captures
+  onCapture:null,    // callback when a cycle is captured
+  onStateChange:null,
+
+  reset(){
+    this.state=this.S.IDLE; this.refPeriod=null; this.refFocusDist=null;
+    this.stableCount=0; this.lensStableCount=0; this.periodHistory=[];
+    this.measurements=[];
+  },
+
+  // Push a new observation and advance state machine
+  push(obs){ // {period, strength, lap, focDist, t}
+    const buf=this.periodHistory;
+    buf.push(obs);
+    if(buf.length>40)buf.shift(); // keep ~6 seconds
+
+    const now=obs.t||Date.now();
+    const recent=buf.slice(-8);
+    if(recent.length<3){this._setState(this.S.REF_INIT);return;}
+
+    const periods=recent.map(r=>r.period).filter(Boolean);
+    if(!periods.length)return;
+    const mu=periods.reduce((s,v)=>s+v,0)/periods.length;
+    const cv=Math.sqrt(periods.reduce((s,v)=>s+(v-mu)**2,0)/periods.length)/mu;
+
+    switch(this.state){
+      case this.S.IDLE:
+      case this.S.REF_INIT:
+        if(cv<C.CV_THRESH&&periods.length>=5){this.stableCount++;if(this.stableCount>=C.STABLE_COUNT){this.refPeriod=mu;this.refFocusDist=obs.focDist;this._setState(this.S.REF_READY);this.stableCount=0;}}
+        else this.stableCount=0;
+        break;
+
+      case this.S.REF_READY:
+        // Continuously refresh reference (slowly)
+        if(cv<C.CV_THRESH){this.refPeriod=this.refPeriod*.85+mu*.15;if(obs.focDist)this.refFocusDist=obs.focDist;}
+        // Detect lens entering
+        if(this.refPeriod&&Math.abs(mu/this.refPeriod-1)>C.LENS_THRESH&&now-this.lastCapT>this.MIN_CAP_GAP)
+          {this._setState(this.S.LENS_ENTERING);this.lensStableCount=0;}
+        break;
+
+      case this.S.LENS_ENTERING:
+        if(!this.refPeriod){this._setState(this.S.REF_INIT);break;}
+        const ratioE=mu/this.refPeriod;
+        if(Math.abs(ratioE-1)<C.LENS_THRESH*.7){this._setState(this.S.REF_READY);break;} // lens removed quickly
+        if(cv<C.CV_THRESH){this.lensStableCount++;if(this.lensStableCount>=4){this._setState(this.S.LENS_STABLE);}}
+        else this.lensStableCount=0;
+        break;
+
+      case this.S.LENS_STABLE:
+        if(!this.refPeriod){this._setState(this.S.REF_INIT);break;}
+        const ratioS=mu/this.refPeriod;
+        if(Math.abs(ratioS-1)<C.LENS_THRESH*.6){this._setState(this.S.REF_READY);break;} // lens removed
+        if(cv<C.CV_THRESH&&now-this.lastCapT>this.MIN_CAP_GAP){
+          this.lastCapT=now;
+          this._setState(this.S.CAPTURING);
+          if(this.onCapture)this.onCapture(mu, obs.focDist);
+        }
+        break;
+
+      case this.S.CAPTURING:
+        // Managed externally; state advances after capture
+        break;
+    }
+  },
+
+  afterCapture(result){
+    if(result)this.measurements.push(result);
+    this._setState(this.S.CYCLE_DONE);
+    setTimeout(()=>this._setState(this.S.REF_READY),900);
+  },
+
+  _setState(s){
+    if(this.state===s)return;
+    this.state=s;
+    if(this.onStateChange)this.onStateChange(s);
+  }
+};
+
+/* ══════════════════════════════════════════
+   MULTI-FRAME ANALYZER
+══════════════════════════════════════════ */
+const Anlz = {
+  async multi(vid, n, progressCb){
+    const rs=[];
+    for(let i=0;i<n;i++){
+      await delay(C.POLL_MS);
+      const id=Cam.capture(vid);
+      if(!id)continue;
+      const r=IP.analyze(id);
+      if(r.ok)rs.push(r);
+      if(progressCb)progressCb(i+1,n);
+    }
+    if(!rs.length)return{ok:false,err:'No valid frames'};
+    // IQR outlier rejection
+    const ps=rs.map(r=>r.avgPeriod).slice().sort((a,b)=>a-b);
+    const q1=ps[~~(ps.length*.25)],q3=ps[~~(ps.length*.75)],iqr=q3-q1;
+    const good=rs.filter(r=>r.avgPeriod>=q1-1.5*iqr&&r.avgPeriod<=q3+1.5*iqr);
+    if(!good.length)return{ok:false,err:'Inconsistent readings — hold still'};
+    const avg=a=>a.reduce((s,v)=>s+v,0)/a.length;
+    return{ok:true,hPeriod:avg(good.map(r=>r.hPeriod)),vPeriod:avg(good.map(r=>r.vPeriod)),avgPeriod:avg(good.map(r=>r.avgPeriod)),strength:avg(good.map(r=>r.strength)),frames:good.length};
+  }
+};
+
+/* ══════════════════════════════════════════
+   OPTICS MODULE
+══════════════════════════════════════════ */
+const Opt = {
+  pow(lPer, rPer, dMM){
+    if(lPer<=0||rPer<=0)return{ok:false};
+    const M=lPer/rPer;
+    if(Math.abs(M-1)<.003)return{ok:true,power:0,M,f:Infinity};
+    const fMM=(M*dMM)/(M-1);
+    const raw=1000/fMM;
+    const cl=Math.max(C.MIN_D,Math.min(C.MAX_D,raw));
+    return{ok:true,power:Math.round(cl/C.PREC)*C.PREC,rawPower:raw,M,f:fMM};
+  },
+
+  // Full: sphere + cylinder (H vs V difference)
+  full(lRes, rRes, dMM){
+    const h=this.pow(lRes.hPeriod,rRes.hPeriod,dMM);
+    const v=this.pow(lRes.vPeriod,rRes.vPeriod,dMM);
+    const avg=this.pow(lRes.avgPeriod,rRes.avgPeriod,dMM);
+    if(!avg.ok)return{ok:false};
+    const hP=h.ok?h.power:avg.power, vP=v.ok?v.power:avg.power;
+    const sphere=Math.round(((hP+vP)/2)/C.PREC)*C.PREC;
+    const cylinder=Math.round((hP-vP)/C.PREC)*C.PREC;
+    const axis=Math.abs(cylinder)>=.25?(hP>vP?90:180):0;
+    return{ok:true,sphere,cylinder,axis,M:avg.M,f:avg.f,rawPower:avg.rawPower,method:'frequency'};
+  },
+
+  // Focus-distance method (if camera API supports it)
+  powFromFocusDist(dLens, dRef){
+    if(!dLens||!dRef||dLens<=0||dRef<=0)return{ok:false};
+    // Power = 1/d_lens - 1/d_ref (distances in meters → diopters)
+    // When lens is +ve, camera focuses closer → dLens < dRef, so power is +ve
+    const raw=1/dLens-1/dRef;
+    const cl=Math.max(C.MIN_D,Math.min(C.MAX_D,raw));
+    return{ok:true,power:Math.round(cl/C.PREC)*C.PREC,rawPower:raw,method:'focus_distance'};
+  },
+
+  fmtP(p){if(p===null||p===undefined)return'—';if(Math.abs(p)<.01)return'Plano';return(p>0?'+':'')+p.toFixed(2)+' D';},
+  fmtC(c){if(!c||Math.abs(c)<.25)return'—';return(c>0?'+':'')+c.toFixed(2)+' D';},
+  fmtA(a){return(!a||!a)?'—':a+'°';},
+  cls(s,c=0){
+    const a=Math.abs(s),hc=c&&Math.abs(c)>=.25;
+    let b=a<.13?'Plano':s>0?(a<=2?'Mild hyperopia':a<=4?'Moderate hyperopia':'High hyperopia'):(a<=2?'Mild myopia':a<=4?'Moderate myopia':a<=6?'High myopia':'Very high myopia');
+    return hc?b+' + astigmatism':b;
+  },
+  pcls(p){if(!p||Math.abs(p)<.13)return'zero';return p>0?'pos':'neg';},
+};
+
+/* ══════════════════════════════════════════
+   WAVEFORM DISPLAY
+══════════════════════════════════════════ */
+const WaveViz = {
+  canvas:null, ctx:null,
+  history:[], // {ratio, state, isMeas, focDist, t}
+  refFocMin:null, refFocMax:null,
+
+  init(canvas){
+    this.canvas=canvas; this.ctx=canvas.getContext('2d');
+    this.history=[];
+    this._resize();
+    window.addEventListener('resize',()=>this._resize());
+  },
+
+  _resize(){
+    const w=this.canvas.parentElement.clientWidth;
+    this.canvas.width=w||400; this.canvas.height=80;
+  },
+
+  push(ratio, state, isMeas, focDist){
+    this.history.push({ratio,state,isMeas,focDist,t:Date.now()});
+    if(this.history.length>200)this.history.shift();
+    this.draw();
+  },
+
+  draw(){
+    if(!this.canvas)return;
+    const cv=this.canvas,ctx=this.ctx,w=cv.width,h=cv.height;
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle='#08162a'; ctx.fillRect(0,0,w,h);
+
+    // Baseline at center
+    const cy=h/2,vRange=.35; // ±35% period ratio
+    const yFor=r=>cy-(r-1)/vRange*(cy-6);
+
+    // Draw zone backgrounds
+    const n=this.history.length;
+    for(let i=1;i<n;i++){
+      const px=(i-1)/(n-1)*w,nx=i/(n-1)*w;
+      const s=this.history[i].state;
+      if(s===Wave.S.REF_READY){ctx.fillStyle='rgba(0,230,160,.06)';}
+      else if(s===Wave.S.LENS_STABLE||s===Wave.S.CAPTURING||s===Wave.S.CYCLE_DONE){ctx.fillStyle='rgba(0,229,255,.07)';}
+      else ctx.fillStyle='transparent';
+      ctx.fillRect(px,0,nx-px,h);
+    }
+
+    // Center line (ratio=1)
+    ctx.strokeStyle='rgba(26,52,84,.8)'; ctx.lineWidth=1;
+    ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(w,cy); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ±5% bands
+    ctx.strokeStyle='rgba(0,230,160,.15)'; ctx.lineWidth=1;
+    [.05,-.05].forEach(off=>{const y2=yFor(1+off);ctx.beginPath();ctx.moveTo(0,y2);ctx.lineTo(w,y2);ctx.stroke();});
+
+    // Focus distance (if available) as purple line
+    const focPts=this.history.filter(p=>p.focDist);
+    if(focPts.length>1){
+      const fDs=focPts.map(p=>p.focDist);
+      const fMin=Math.min(...fDs),fMax=Math.max(...fDs)+.01;
+      ctx.strokeStyle='rgba(177,151,252,.5)'; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      for(let i=0;i<n;i++){
+        if(!this.history[i].focDist)continue;
+        const x=i/(n-1)*w;
+        const y2=h-((this.history[i].focDist-fMin)/(fMax-fMin))*(h-10)-5;
+        i===0?ctx.moveTo(x,y2):ctx.lineTo(x,y2);
+      }
+      ctx.stroke();
+    }
+
+    // Period ratio line
+    ctx.strokeStyle='rgba(0,229,255,.7)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      if(!this.history[i].ratio)continue;
+      const x=i/(n-1)*w, y2=Math.max(3,Math.min(h-3,yFor(this.history[i].ratio)));
+      i===0?ctx.moveTo(x,y2):ctx.lineTo(x,y2);
+    }
+    ctx.stroke();
+
+    // Measurement markers
+    for(let i=0;i<n;i++){
+      if(!this.history[i].isMeas)continue;
+      const x=i/(n-1)*w, y2=Math.max(6,Math.min(h-6,yFor(this.history[i].ratio)));
+      ctx.fillStyle=`rgba(255,169,77,1)`;
+      ctx.beginPath(); ctx.arc(x,y2,4,0,Math.PI*2); ctx.fill();
+    }
+
+    // Y-axis labels
+    ctx.fillStyle='rgba(107,151,181,.5)'; ctx.font='10px JetBrains Mono,monospace';
+    ctx.fillText('1.0',3,cy-2);
+    ctx.fillText('+5%',3,yFor(1.05)+3);
+    ctx.fillText('-5%',3,yFor(.95)+3);
+  }
+};
+
+/* ══════════════════════════════════════════
+   UI MODULE
+══════════════════════════════════════════ */
+const UI = {
+  show(id){document.querySelectorAll('.step').forEach(s=>s.classList.remove('on'));const el=document.getElementById('step-'+id);if(el)el.classList.add('on');window.scrollTo({top:0,behavior:'smooth'});},
+  prog(p){document.getElementById('pBar').style.width=p+'%';},
+  status(txt,type){const b=document.getElementById('sBadge');b.textContent=txt;b.className='badge'+(type?' '+type:'');},
+  notify(msg,type='info'){const n=document.getElementById('notif');n.textContent=msg;n.className='notif '+type+' show';clearTimeout(n._t);n._t=setTimeout(()=>n.classList.remove('show'),3500);},
+  err(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',8000);},
+  showMask(show,txt,sub){
+    const m=document.getElementById('capMask');m.classList.toggle('show',show);
+    if(txt)document.getElementById('capTxt').textContent=txt;
+    const s=document.getElementById('capSub');if(s&&sub)s.textContent=sub;
+  },
+  setStateBanner(txt,cls){
+    const b=document.getElementById('stateBanner');b.textContent=txt;b.className='state-banner '+cls;
+  },
+  setCamState(state){
+    const w=document.getElementById('mainCamWrap');
+    w.className='cam-wrap';
+    if(state===Wave.S.REF_READY)w.classList.add('state-ref');
+    else if(state===Wave.S.LENS_STABLE||state===Wave.S.CAPTURING)w.classList.add('state-capturing');
+    else if(state===Wave.S.LENS_ENTERING)w.classList.add('state-lens');
+    else w.classList.add('state-idle');
+  },
+  updateHUD(lap, sig, lensRatio, focDist, focDistCaps){
+    const fNorm=Math.min(100,Math.round(Math.sqrt(lap)/2.3));
+    document.getElementById('focFill').style.width=fNorm+'%';
+    document.getElementById('focVal').textContent=fNorm+'%';
+
+    const sNorm=Math.min(100,Math.round(sig*300));
+    document.getElementById('sigFill').style.width=sNorm+'%';
+    document.getElementById('sigVal').textContent=sNorm+'%';
+
+    const lNorm=Math.min(100,Math.round(Math.abs(lensRatio-1)/C.LENS_THRESH*100*.6+50));
+    document.getElementById('lnsFill').style.width=lNorm+'%';
+    document.getElementById('lnsVal').textContent=(lensRatio?((lensRatio-1)*100).toFixed(1)+'%':'—');
+
+    if(focDist!==null&&focDistCaps){
+      document.getElementById('focDistHud').style.display='';
+      document.getElementById('fdVal').textContent=focDist!=null?focDist.toFixed(2)+'m':'—';
+      if(focDistCaps&&focDist!=null){
+        const range=focDistCaps.max-focDistCaps.min;
+        const norm=range>0?((focDist-focDistCaps.min)/range*100):50;
+        document.getElementById('fdFill').style.width=Math.min(100,norm)+'%';
+      }
+    }
+  }
+};
+
+/* ══════════════════════════════════════════
+   EXPORTER
+══════════════════════════════════════════ */
+const Exp = {
+  json(st){
+    const d={timestamp:new Date().toISOString(),tool:'OptiScan Pro v5.0',lensDistMM:st.distMM,results:{}};
+    for(const eye of['right','left']){const r=st.results[eye];if(r)d.results[eye]={sphere:r.sphere,cylinder:r.cylinder||0,axis:r.axis||0,magnification:r.M,focalLengthMM:r.f,classification:Opt.cls(r.sphere,r.cylinder),method:r.method,cycles:r.cycles||1};}
+    this._dl(JSON.stringify(d,null,2),'application/json','optiscan.json');
+  },
+  csv(st){
+    const rows=[['Eye','Sphere (D)','Cylinder (D)','Axis (deg)','Magnification','Focal Length (mm)','Classification','Method','Cycles']];
+    for(const[k,lbl]of[['right','Right (OD)'],['left','Left (OS)']]){const r=st.results[k];rows.push(r?[lbl,r.sphere,r.cylinder||0,r.axis||0,r.M?.toFixed(4),r.f?.toFixed(1),Opt.cls(r.sphere,r.cylinder),r.method||'frequency',r.cycles||1]:[lbl,'—','—','—','—','—','Not measured','—','—']);}
+    this._dl(rows.map(r=>r.join(',')).join('\n'),'text/csv','optiscan.csv');
+  },
+  _dl(content,type,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();}
+};
+
+/* utility */
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+function mean(arr){return arr.reduce((s,v)=>s+v,0)/arr.length;}
+
+/* ══════════════════════════════════════════
+   APP CONTROLLER
+══════════════════════════════════════════ */
+const App = {
+  st:{
+    currentEye:'right', distMM:50,
+    refRes:null, measured:new Set(),
+    results:{right:null,left:null},
+    mode:'wave', // 'wave' | 'classic'
+    focDistAvail:false,
+    isCapturing:false,
+    waveRef:null, // reference result stored for wave comparisons
+    waveAllMeas:[], // all measurements from wave cycles for averaging
+    waveAllFocDist:[], // focus distances through lens
+    waveRefFocDist:null,
+    scanActive:false,
+  },
+
+  init(){
+    Cam.init(document.getElementById('capCanvas'));
+    // Initial pattern
+    const pc=document.getElementById('patCanvas'); pc.width=640; pc.height=480;
+    Pat.render(pc,'checker');
+    WaveViz.init(document.getElementById('waveCanvas'));
+    Wave.reset();
+    this._bind();
+    UI.show('welcome');
+    UI.status('STANDBY');
+  },
+
+  _bind(){
+    // Welcome
+    $('btnStart').addEventListener('click',()=>this.startWave());
+    $('btnClassic').addEventListener('click',()=>{this.st.mode='classic';this.goSetup();});
+    $('btnUpload').addEventListener('click',()=>this.goUpload());
+
+    // Setup — pattern tabs
+    document.querySelectorAll('.ptab').forEach(t=>{
+      t.addEventListener('click',()=>{
+        document.querySelectorAll('.ptab').forEach(x=>x.classList.remove('sel'));
+        t.classList.add('sel');
+        const type=t.dataset.pat;
+        if(type==='upload'){$('patWrap').style.display='none';$('upPat').style.display='block';}
+        else{$('patWrap').style.display='';$('upPat').style.display='none';Pat.render($('patCanvas'),type);}
+      });
+    });
+    $('patFile').addEventListener('change',e=>{
+      if(e.target.files[0])Pat.loadFile(e.target.files[0],$('patCanvas'),()=>{$('patWrap').style.display='';$('upPat').style.display='none';UI.notify('Pattern loaded','ok');});
+    });
+    this._dnd($('upPat'),f=>Pat.loadFile(f,$('patCanvas'),()=>{$('patWrap').style.display='';$('upPat').style.display='none';}));
+
+    $('btnDlPat').addEventListener('click',()=>Pat.download($('patCanvas')));
+    $('btnFSPat').addEventListener('click',()=>{if($('patWrap').requestFullscreen)$('patWrap').requestFullscreen();});
+
+    const ds=$('distSlider');
+    ds.addEventListener('input',e=>{this.st.distMM=+e.target.value;$('distLbl').textContent=e.target.value+' mm';this._diagUpdate();});
+    this._diagUpdate();
+
+    $('btnGoScan').addEventListener('click',()=>this.goScan());
+
+    // Scan controls
+    $('btnFlipCam').addEventListener('click',()=>Cam.flip($('mainVid')));
+    $('btnBackSetup').addEventListener('click',()=>{Cam.stop();Wave.reset();this.goSetup();});
+    $('btnManCapRef').addEventListener('click',()=>this.manualCapRef());
+    $('btnManCapLens').addEventListener('click',()=>this.manualCapLens());
+    $('btnSwitchEye').addEventListener('click',()=>this.switchEye());
+    $('btnFinish').addEventListener('click',()=>this.showResults());
+    $('btnNewScan').addEventListener('click',()=>this.reset());
+
+    // Export
+    $('btnExpJSON').addEventListener('click',()=>Exp.json(this.st));
+    $('btnExpCSV').addEventListener('click',()=>Exp.csv(this.st));
+    $('btnPrint').addEventListener('click',()=>window.print());
+
+    // Upload analysis
+    this._bindUpload();
+  },
+
+  _dnd(el,cb){
+    el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag');});
+    el.addEventListener('dragleave',()=>el.classList.remove('drag'));
+    el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))cb(f);});
+  },
+
+  _diagUpdate(){
+    $('setupDiag').textContent=
+`  ┌──────────────────┐
+  │  PATTERN SCREEN  │
+  └────────┬─────────┘
+           │
+      ┌────┴────┐
+      │  LENS   │  ← wave here
+      └────┬────┘
+           │ ← ${this.st.distMM} mm
+      ┌────┴────┐
+      │  CAMERA │
+      └─────────┘`;
+  },
+
+  eye(e){
+    this.st.currentEye=e;
+    $('eyeBtnR').classList.toggle('sel',e==='right');
+    $('eyeBtnL').classList.toggle('sel',e==='left');
+  },
+
+  startWave(){this.st.mode='wave';this.goSetup();},
+  goSetup(){UI.show('setup');UI.prog(10);UI.status('SETUP');},
+  goUpload(){UI.show('upload');UI.prog(0);},
+
+  async goScan(){
+    UI.show('scan');UI.prog(25);UI.status('CAMERA INIT');
+    const vid=$('mainVid');
+    const ok=await Cam.start(vid);
+    if(!ok){UI.err('errScan','Camera access denied. Please allow camera permissions.');return;}
+
+    // Show camera specs
+    this._showSpecs(Cam.specs);
+
+    // Detect focus distance API
+    this.st.focDistAvail=Cam.specs.focusDistanceCaps!=null;
+
+    // Update eye labels
+    const isR=this.st.currentEye==='right';
+    $('scanEyeLbl').textContent=isR?'Right':'Left';
+    $('scanEyeCode').textContent=isR?'(OD)':'(OS)';
+
+    // Reset wave state
+    Wave.reset();
+    this.st.waveAllMeas=[];
+    this.st.waveAllFocDist=[];
+    this.st.waveRefFocDist=null;
+    this.st.waveRef=null;
+    this.st.isCapturing=false;
+    this.st.scanActive=true;
+
+    // Wave detector callbacks
+    Wave.onCapture=(avgPeriod, focDist)=>this._onWaveCapture(avgPeriod,focDist);
+    Wave.onStateChange=(s)=>this._onStateChange(s);
+
+    this._onStateChange(Wave.S.IDLE);
+    this._startPoll(vid);
+    UI.status('SCANNING','hot');
+  },
+
+  _showSpecs(specs){
+    const g=$('camSpecCard');g.style.display='';
+    const sg=$('specGrid'); sg.innerHTML='';
+    const add=(label,val,hl)=>{
+      const item=document.createElement('div'); item.className='spec-item';
+      item.innerHTML=`<div class="spec-label">${label}</div><div class="spec-val${hl?' highlight':''}">${val??'—'}</div>`;
+      sg.appendChild(item);
+    };
+    if(specs.width)add('RESOLUTION',`${specs.width}×${specs.height}`,true);
+    if(specs.fps)add('FRAME RATE',`${specs.fps} fps`);
+    if(specs.facing)add('CAMERA',specs.facing.toUpperCase());
+    if(specs.focalLength)add('FOCAL LEN',`${specs.focalLength.toFixed(1)} mm`,true);
+    if(specs.focusDistance!=null)add('FOCUS DIST',`${specs.focusDistance.toFixed(2)} m`,true);
+    if(specs.focusDistanceCaps)add('FOCUS RANGE',`${specs.focusDistanceCaps.min.toFixed(1)}–${specs.focusDistanceCaps.max.toFixed(1)} m`,true);
+    if(specs.zoom)add('ZOOM',`${specs.zoom.toFixed(1)}×`);
+    if(specs.focusMode)add('FOCUS MODE',specs.focusMode.toUpperCase());
+    if(specs.maxPhotoH)add('MAX PHOTO',`${specs.maxPhotoW}×${specs.maxPhotoH}`);
+    $('focusApiNote').textContent=specs.focusDistanceCaps
+      ?'✅ Focus-distance API available — power calculation will use autofocus shift for improved accuracy.'
+      :'ℹ Camera does not expose focus distance. Using frequency analysis with manual distance setting.';
+    const mb=$('methodBadge');
+    if(specs.focusDistanceCaps){mb.style.display='';mb.textContent='FOCUS-DIST API';mb.className='badge hot';}
+    else{mb.style.display='';mb.textContent='FREQ ANALYSIS';mb.className='badge';}
+  },
+
+  _startPoll(vid){
+    Cam.startPoll(()=>{
+      if(!this.st.scanActive)return;
+      if(this.st.isCapturing)return;
+      const id=Cam.capture(vid);
+      if(!id)return;
+
+      // Fast analysis for detection
+      const lap=IP.lapVar(id);
+      const fr=IP.fastPeriod(id);
+      const focDist=Cam.getFocusDistanceLive();
+      const period=fr?fr.period:null;
+      const strength=fr?fr.strength:0;
+
+      if(period){
+        Wave.push({period,strength,lap,focDist,t:Date.now()});
+      }
+
+      const ratio=period&&Wave.refPeriod?period/Wave.refPeriod:1;
+      UI.updateHUD(lap,strength,ratio,focDist,Cam.specs.focusDistanceCaps);
+      WaveViz.push(ratio,Wave.state,false,focDist);
+    });
+  },
+
+  _onStateChange(state){
+    UI.setCamState(state);
+    const S=Wave.S, isR=this.st.currentEye==='right';
+    const instrTitle=$('instrTitle'), instrBody=$('instrBody');
+    const d=this.st.distMM;
+    switch(state){
+      case S.IDLE:
+      case S.REF_INIT:
+        UI.setStateBanner('CALIBRATING…','sb-idle');
+        instrTitle.textContent='ESTABLISHING BASELINE';
+        instrBody.innerHTML='Point your camera at the reference pattern <strong>without any lens</strong> in front of it. Hold steady until the green border appears.';
+        break;
+      case S.REF_READY:
+        UI.setStateBanner('READY — WAVE YOUR GLASSES','sb-ref');
+        instrTitle.textContent='REFERENCE LOCKED ✓';
+        instrBody.innerHTML=`Baseline captured. Now hold the <strong>${isR?'right':'left'}</strong> lens <strong>${d} mm</strong> in front of the camera, wait for it to settle, then remove it. <em>Repeat 3+ times for best accuracy.</em>`;
+        if(!this.st.waveRef) {
+          // Auto-capture reference on first lock
+          this._captureRef();
+        }
+        break;
+      case S.LENS_ENTERING:
+        UI.setStateBanner('LENS DETECTED…','sb-lens');
+        instrTitle.textContent='LENS ENTERING FRAME';
+        instrBody.innerHTML='Hold steady — waiting for the image to stabilize through the lens.';
+        break;
+      case S.LENS_STABLE:
+        UI.setStateBanner('LENS STABLE — MEASURING…','sb-capturing');
+        instrTitle.textContent='HOLD STILL — AUTO-CAPTURING';
+        instrBody.innerHTML='The lens is detected and stable. <strong>Keep very still</strong> — capturing frames now.';
+        break;
+      case S.CAPTURING:
+        UI.setStateBanner('CAPTURING…','sb-capturing');
+        break;
+      case S.CYCLE_DONE:
+        const n=this.st.waveAllMeas.length;
+        UI.setStateBanner(`✓ CYCLE ${n} DONE — REMOVE LENS`,'sb-measured');
+        instrTitle.textContent=`CYCLE ${n} CAPTURED ✓`;
+        instrBody.innerHTML=`Measurement ${n} saved. Remove the glasses and wave again for more accuracy. ${n>=C.MIN_CYCLES?'<strong>You can view results now.</strong>':'Need '+(C.MIN_CYCLES-n)+' more for reliable result.'}`;
+        if(n>=C.MIN_CYCLES){$('nextBtns').style.display='flex';const other=this.st.currentEye==='right'?'left':'right';$('btnSwitchEye').style.display=this.st.measured.has(other)?'none':'';}
+        break;
+    }
+  },
+
+  async _captureRef(){
+    if(this.st.waveRef)return; // already captured
+    const vid=$('mainVid');
+    const res=await Anlz.multi(vid,7);
+    if(!res.ok)return;
+    this.st.waveRef=res;
+    this.st.waveRefFocDist=Cam.getFocusDistanceLive();
+    UI.notify('Reference baseline locked','ok');
+  },
+
+  async _onWaveCapture(avgPeriodLens, focDistLens){
+    if(this.st.isCapturing)return;
+    if(!this.st.waveRef){Wave.afterCapture(null);return;}
+    this.st.isCapturing=true;
+    const vid=$('mainVid');
+    UI.showMask(true,'CAPTURING FRAMES…','Hold lens perfectly still');
+
+    const lensRes=await Anlz.multi(vid,C.FRAMES,(f,t)=>{
+      // Update frame ring
+      const circ=document.getElementById('capMask');
+      if(circ){const p=f/t*100; const span=circ.querySelector('.atxt');if(span)span.textContent=`FRAME ${f}/${t}`;}
+    });
+
+    UI.showMask(false);
+    this.st.isCapturing=false;
+
+    if(!lensRes.ok){
+      UI.notify('Capture failed: '+lensRes.err,'warn');
+      Wave.afterCapture(null);return;
+    }
+
+    // Calculate power
+    let result;
+    // Try focus-distance method first
+    const focDistLive=Cam.getFocusDistanceLive();
+    if(this.st.focDistAvail&&this.st.waveRefFocDist&&focDistLive){
+      const fdRes=Opt.powFromFocusDist(focDistLive,this.st.waveRefFocDist);
+      if(fdRes.ok){
+        // Blend with frequency method
+        const freqRes=Opt.full(lensRes,this.st.waveRef,this.st.distMM);
+        if(freqRes.ok){
+          const sph=(fdRes.power*.6+freqRes.sphere*.4);
+          result={...freqRes,sphere:Math.round(sph/C.PREC)*C.PREC,method:'hybrid',focDistPow:fdRes.power,freqPow:freqRes.sphere};
+        } else {result=fdRes;result.sphere=fdRes.power;result.cylinder=0;result.axis=0;}
+      }
+    }
+    if(!result){
+      const freqRes=Opt.full(lensRes,this.st.waveRef,this.st.distMM);
+      if(!freqRes.ok){UI.notify('Calculation failed — ensure lens is clear and pattern visible','err');Wave.afterCapture(null);return;}
+      result=freqRes;
+    }
+
+    result.strength=lensRes.strength;
+    result.frames=lensRes.frames;
+    this.st.waveAllMeas.push(result);
+    if(focDistLens)this.st.waveAllFocDist.push(focDistLens);
+
+    // Running average
+    this._updateRunningAvg();
+
+    // Mark waveform
+    WaveViz.push(lensRes.avgPeriod/this.st.waveRef.avgPeriod,Wave.S.CYCLE_DONE,true,focDistLive);
+    Wave.afterCapture(result);
+  },
+
+  _updateRunningAvg(){
+    const ms=this.st.waveAllMeas;
+    if(!ms.length)return;
+    const avgSph=mean(ms.map(m=>m.sphere||0));
+    const avgCyl=mean(ms.map(m=>m.cylinder||0));
+    const avgAx=mean(ms.map(m=>m.axis||0));
+    const avgM=mean(ms.map(m=>m.M||1));
+    const avgStr=mean(ms.map(m=>m.strength||0));
+    const avgF=mean(ms.map(m=>isFinite(m.f)?m.f:0).filter(v=>v>0));
+    const sph=Math.round(avgSph/C.PREC)*C.PREC;
+    const cyl=Math.round(avgCyl/C.PREC)*C.PREC;
+    const ax=Math.round(avgAx);
+    const conf=Math.min(100,Math.round(avgStr*300));
+    const pwr=sph;
+
+    const rc=$('runCard'); rc.style.display='';
+    const rp=$('runPwr'); rp.textContent=Opt.fmtP(pwr); rp.className='pwr '+Opt.pcls(pwr)+' mt3 tc';
+    rp.style.fontSize='2.4rem';
+    $('runCls').textContent=Opt.cls(sph,cyl);
+    $('runSph').textContent=Opt.fmtP(sph);
+    $('runCyl').textContent=Opt.fmtC(cyl);
+    $('runAx').textContent=Opt.fmtA(ax);
+    $('runMag').textContent=avgM.toFixed(4)+'×';
+    $('runConf').textContent=conf+'%';
+    $('runCfill').style.width=conf+'%';
+
+    // Store as current eye result
+    this.st.results[this.st.currentEye]={sphere:sph,cylinder:cyl,axis:ax,M:avgM,f:avgF,strength:avgStr,method:ms[ms.length-1].method,cycles:ms.length};
+    this.st.measured.add(this.st.currentEye);
+
+    // Update progress
+    const el=$('prog'+this.st.currentEye==='right'?'R':'L'); // will match below
+    ['R','L'].forEach(lr=>{
+      const eye=lr==='R'?'right':'left';
+      const r=this.st.results[eye];
+      const el=$('prog'+lr); if(!r){return;}
+      el.textContent=Opt.fmtP(r.sphere); el.className='pwr '+Opt.pcls(r.sphere);
+    });
+
+    $('cycleNum').textContent=ms.length;
+    $('cycleNeeded').textContent=ms.length>=C.MIN_CYCLES?`✓ ${ms.length} cycles — reliable result`:`Wave ${C.MIN_CYCLES-ms.length} more time${C.MIN_CYCLES-ms.length!==1?'s':''} for best accuracy`;
+  },
+
+  async manualCapRef(){
+    if(this.st.isCapturing)return;
+    this.st.isCapturing=true;
+    UI.showMask(true,'Capturing reference…','Keep camera pointed at pattern');
+    const vid=$('mainVid');
+    const res=await Anlz.multi(vid,7);
+    UI.showMask(false);
+    this.st.isCapturing=false;
+    if(!res.ok){UI.err('errScan','Reference failed: '+res.err);return;}
+    this.st.waveRef=res;
+    this.st.waveRefFocDist=Cam.getFocusDistanceLive();
+    Wave.refPeriod=res.avgPeriod;
+    Wave._setState(Wave.S.REF_READY);
+    UI.notify('Reference captured manually','ok');
+  },
+
+  async manualCapLens(){
+    if(!this.st.waveRef){UI.notify('Capture reference first','warn');return;}
+    if(this.st.isCapturing)return;
+    this.st.isCapturing=true;
+    UI.showMask(true,'Measuring lens…','Hold lens very still');
+    const vid=$('mainVid');
+    const lensRes=await Anlz.multi(vid,C.FRAMES);
+    UI.showMask(false);
+    this.st.isCapturing=false;
+    if(!lensRes.ok){UI.err('errScan','Measurement failed: '+lensRes.err);return;}
+    const focDist=Cam.getFocusDistanceLive();
+    await this._processMeasurement(lensRes,focDist);
+    Wave._setState(Wave.S.CYCLE_DONE);
+    setTimeout(()=>Wave._setState(Wave.S.REF_READY),600);
+  },
+
+  async _processMeasurement(lensRes, focDist){
+    let result;
+    if(this.st.focDistAvail&&this.st.waveRefFocDist&&focDist){
+      const fdRes=Opt.powFromFocusDist(focDist,this.st.waveRefFocDist);
+      const freqRes=Opt.full(lensRes,this.st.waveRef,this.st.distMM);
+      if(fdRes.ok&&freqRes.ok){const s=(fdRes.power*.6+freqRes.sphere*.4);result={...freqRes,sphere:Math.round(s/C.PREC)*C.PREC,method:'hybrid'};}
+      else if(fdRes.ok){result={sphere:fdRes.power,cylinder:0,axis:0,M:lensRes.avgPeriod/this.st.waveRef.avgPeriod,f:1000/fdRes.power,method:'focus_dist'};}
+      else if(freqRes.ok){result=freqRes;}
+    }
+    if(!result){const fr=Opt.full(lensRes,this.st.waveRef,this.st.distMM);if(!fr.ok){UI.notify('Calculation failed','err');return;}result=fr;}
+    result.strength=lensRes.strength;result.frames=lensRes.frames;
+    this.st.waveAllMeas.push(result);
+    this._updateRunningAvg();
+  },
+
+  switchEye(){
+    this.st.currentEye=this.st.currentEye==='right'?'left':'right';
+    this.st.waveAllMeas=[];
+    this.st.waveAllFocDist=[];
+    this.st.waveRef=null;
+    this.st.waveRefFocDist=null;
+    Wave.reset();
+    WaveViz.history=[];WaveViz.draw();
+    $('nextBtns').style.display='none';
+    $('runCard').style.display='none';
+    $('cycleNum').textContent='0';
+    const isR=this.st.currentEye==='right';
+    $('scanEyeLbl').textContent=isR?'Right':'Left';
+    $('scanEyeCode').textContent=isR?'(OD)':'(OS)';
+    this._onStateChange(Wave.S.IDLE);
+    UI.notify('Switched to '+(isR?'right':'left')+' eye','info');
+  },
+
+  showResults(){
+    Cam.stop();
+    UI.show('results');
+    UI.prog(100);
+    UI.status('COMPLETE','ok');
+    const{right,left}=this.st.results;
+    const pop=(r,suf)=>{
+      const el=$('fin'+suf),cl=$('fin'+suf+'Cl'),cy2=$('fin'+suf+'Cy');
+      const rxS=$('rx'+suf+'S'),rxC=$('rx'+suf+'C'),rxA=$('rx'+suf+'A'),rxCl=$('rx'+suf+'Cl');
+      if(!r){if(el)el.textContent='Not measured';return;}
+      el.textContent=Opt.fmtP(r.sphere);el.className='pwr '+Opt.pcls(r.sphere);
+      cl.textContent=Opt.cls(r.sphere,r.cylinder);
+      cy2.textContent=Math.abs(r.cylinder||0)>=.25?`Cylinder: ${Opt.fmtC(r.cylinder)}, Axis: ${Opt.fmtA(r.axis)}`:'';
+      if(rxS)rxS.textContent=Opt.fmtP(r.sphere);
+      if(rxC)rxC.textContent=Opt.fmtC(r.cylinder);
+      if(rxA)rxA.textContent=Opt.fmtA(r.axis);
+      if(rxCl)rxCl.textContent=Opt.cls(r.sphere,r.cylinder);
+    };
+    pop(right,'R');pop(left,'L');
+    $('dRM').textContent=right?right.M?.toFixed(4)+'×':'—';
+    $('dLM').textContent=left?left.M?.toFixed(4)+'×':'—';
+    $('dDst').textContent=this.st.distMM+' mm';
+    $('dRF').textContent=right&&isFinite(right.f)?right.f?.toFixed(1)+' mm':'—';
+    $('dLF').textContent=left&&isFinite(left.f)?left.f?.toFixed(1)+' mm':'—';
+    $('dCyc').textContent=(right?.cycles||0)+'R / '+(left?.cycles||0)+'L';
+    const methods=[right?.method,left?.method].filter(Boolean);
+    $('dMeth').textContent=methods.length?[...new Set(methods)].join('+').toUpperCase():'—';
+    const confAvg=mean([right?.strength,left?.strength].filter(Boolean));
+    $('dCnf').textContent=confAvg?Math.round(Math.min(100,confAvg*300))+'%':'—';
+  },
+
+  reset(){
+    Cam.stop();Wave.reset();
+    this.st={currentEye:'right',distMM:50,refRes:null,measured:new Set(),results:{right:null,left:null},
+      mode:'wave',focDistAvail:false,isCapturing:false,waveRef:null,waveAllMeas:[],waveAllFocDist:[],waveRefFocDist:null,scanActive:false};
+    WaveViz.history=[];
+    UI.show('welcome');UI.prog(0);UI.status('STANDBY');
+  },
+
+  // ── Upload analysis ──
+  _uploadState:{lens:null,ref:null},
+  _bindUpload(){
+    $('upDistLbl').textContent='50 mm';
+    $('upDist').addEventListener('input',e=>$('upDistLbl').textContent=e.target.value+' mm');
+    const bindZone=(zoneId,fileId,canvId,key)=>{
+      const zone=$(zoneId),finp=$(fileId),canv=$(canvId);
+      zone.addEventListener('click',()=>finp.click());
+      finp.addEventListener('change',e=>{if(e.target.files[0])this._loadUpImg(e.target.files[0],canv,key);});
+      this._dnd(zone,f=>this._loadUpImg(f,canv,key));
+    };
+    bindZone('upLens','lensFile','lensPreviewC','lens');
+    bindZone('upRef','refFile','refPreviewC','ref');
+    $('btnAnalyzeUp').addEventListener('click',()=>this._analyzeUploads());
+    $('btnUpBack').addEventListener('click',()=>UI.show('welcome'));
+  },
+  _loadUpImg(file,canv,key){
+    Pat.loadFile(file,canv,()=>{
+      canv.style.display='block';
+      this._uploadState[key]=canv;
+      if(this._uploadState.lens&&this._uploadState.ref)$('btnAnalyzeUp').disabled=false;
+      UI.notify(key==='lens'?'Lens image loaded':'Reference image loaded','ok');
+    });
+  },
+  _analyzeUploads(){
+    const{lens,ref}=this._uploadState;
+    if(!lens||!ref)return;
+    const d=+$('upDist').value;
+    const getID=canv=>{const c=canv;return c.getContext('2d').getImageData(0,0,c.width,c.height);};
+    const lRes=IP.analyze(getID(lens));
+    const rRes=IP.analyze(getID(ref));
+    if(!lRes.ok||!rRes.ok){UI.notify('Analysis failed — ensure images show a repeating pattern','err');return;}
+    const res=Opt.full(lRes,rRes,d);
+    if(!res.ok){UI.notify('Could not calculate power','err');return;}
+    const rc=$('upResult'); rc.style.display='';
+    const pEl=$('upPwr'); pEl.textContent=Opt.fmtP(res.sphere); pEl.className='pwr '+Opt.pcls(res.sphere)+' mt3 tc'; pEl.style.fontSize='2.4rem';
+    $('upCls').textContent=Opt.cls(res.sphere,res.cylinder);
+    $('upSph').textContent=Opt.fmtP(res.sphere);
+    $('upCyl').textContent=Opt.fmtC(res.cylinder);
+    $('upMag').textContent=res.M?.toFixed(4)+'×';
+    UI.notify('Analysis complete','ok');
+  }
+};
+
+function $(id){return document.getElementById(id);}
+window.addEventListener('DOMContentLoaded',()=>App.init());
+</script>
+</body>
+</html>

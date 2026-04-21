@@ -123,7 +123,7 @@ const App = {
     const id = Camera.capture(vid);
     const sh = id ? Sharpness.compute(id) : { lap: 0, h: 0, v: 0 };
 
-    this.st.sharpnessRef = sh.lap;
+    this.st.sharpnessRef = sh.fused;
     this.st.dRef = focDist; // may be null if no focus API
     this.st.dRefSharpness = sh;
 
@@ -140,7 +140,7 @@ const App = {
       $('calDistVal').textContent = this.st.manualDistM.toFixed(1) + ' m (manual)';
     }
 
-    $('calSharpVal').textContent = Math.round(sh.lap);
+    $('calSharpVal').textContent = Math.round(sh.fused);
     $('calCard').style.display = '';
     this._setPhase('placing');
     $('btnCaptureLens').disabled = false;
@@ -181,7 +181,7 @@ const App = {
         cylinder: 0, axis: 0,
         dRef: this.st.dRef,
         dLens,
-        sharpness: sh.lap,
+        sharpness: sh.fused,
         shH: sh.h, shV: sh.v,
         cycleNum: this.st.cycleNum + 1,
       };
@@ -207,7 +207,7 @@ const App = {
       // Focus API unavailable — use sharpness comparison with manual distance
       // Estimate relative power from sharpness at fixed distance
       const lapRef = this.st.sharpnessRef || 1;
-      const lapLens = sh.lap;
+      const lapLens = sh.fused;
       // If sharpness with lens is higher, lens helps focus → converging (positive power)
       // This is a rough relative estimate; we use manual distance as pivot
       const sharpRatio = lapLens / lapRef;
@@ -219,7 +219,7 @@ const App = {
         ...res,
         cylinder: 0, axis: 0,
         dRef: dM, dLens: estimatedDLens,
-        sharpness: sh.lap, shH: sh.h, shV: sh.v,
+        sharpness: sh.fused, shH: sh.h, shV: sh.v,
         cycleNum: this.st.cycleNum + 1,
         method: 'sharpness_fallback',
       };
@@ -333,11 +333,11 @@ const App = {
       const id = Camera.capture(vid);
       if (!id) return;
       const sh = Sharpness.compute(id);
-      this.st.sharpnessHistory.push(sh.lap);
+      this.st.sharpnessHistory.push(sh.fused);
       if (this.st.sharpnessHistory.length > 30) this.st.sharpnessHistory.shift();
       const focDist = Camera.getFocusDist();
       UI.updateHUD(sh, focDist, this.st.sharpnessRef, Camera.specs.focusRange);
-      FocusGraph.push(sh.lap, focDist);
+      FocusGraph.push(sh.fused, focDist);
     }, 130);
   },
 

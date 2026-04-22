@@ -330,7 +330,10 @@ Power = 1/d_lens − 1/d_ref</pre>
         </div>
       </div>
 
-      <div class="btn-row mt4">
+      <!-- FIX 11: anisometropia warning (hidden until needed) -->
+      <div id="anisoWarn" class="notif warn" style="display:none;margin:8px 0 0;border-radius:6px;padding:10px 14px;font-size:0.82rem;line-height:1.4"></div>
+
+            <div class="btn-row mt4">
         <button class="btn btn-out btn-sm" id="btnExpJSON">⬇ JSON</button>
         <button class="btn btn-out btn-sm" id="btnExpCSV">⬇ CSV</button>
         <button class="btn btn-out btn-sm" id="btnPrint">🖨 Print</button>
@@ -370,5 +373,16 @@ Power = 1/d_lens − 1/d_ref</pre>
 <script>
   window.addEventListener('DOMContentLoaded', () => App.init());
 </script>
+
+    <!-- Fix 13: PWA service worker registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(r  => console.log('[OptiScan] SW registered, scope:', r.scope))
+            .catch(e => console.warn('[OptiScan] SW registration failed:', e));
+        });
+      }
+    </script>
 </body>
 </html>

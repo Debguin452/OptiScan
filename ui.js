@@ -212,10 +212,20 @@ const UI = {
     const tbody = $('cycleTableBody');
     if (!tbody) return;
     const tr = document.createElement('tr');
-    const pwr = PowerCalc.fmtP(cycle.power);
-    const conf = cycle.sharpness ? Math.min(100, Math.round(Math.sqrt(cycle.sharpness) / 3)) : '—';
+    const pwr  = PowerCalc.fmtP(cycle.power);
+    const conf  = cycle.sharpness ? Math.min(100, Math.round(Math.sqrt(cycle.sharpness) / 3)) : '—';
     const dLens = cycle.dLens ? cycle.dLens.toFixed(3) + ' m' : '—';
     const dRef  = cycle.dRef  ? cycle.dRef.toFixed(3)  + ' m' : '—';
+    /* Compact method badge -- helps user distinguish which measurement path each cycle used */
+    const METHOD_LABELS = {
+      'focus_shift':          '<span style="color:var(--cy);font-size:.72em" title="Focus shift">FS</span>',
+      'focus_shift+cylinder': '<span style="color:var(--cy);font-size:.72em" title="Focus shift + cylinder">FS+C</span>',
+      'blur_profile':         '<span style="color:var(--am);font-size:.72em" title="Blur profile (no Focus API)">BP</span>',
+      'blur_unblur':          '<span style="color:var(--vl);font-size:.72em" title="Blur/unblur cycle">BU</span>',
+      'near_plano':           '<span style="color:var(--tx3);font-size:.72em" title="Near plano">~0</span>',
+      'sharpness_fallback':   '<span style="color:var(--tx3);font-size:.72em" title="Sharpness fallback">SF</span>',
+    };
+    const badge = METHOD_LABELS[cycle.method] || '<span style="color:var(--tx3);font-size:.72em">?</span>';
     tr.innerHTML = `
       <td class="mono" style="color:var(--tx3)">${num}</td>
       <td class="mono cy">${pwr}</td>
@@ -224,6 +234,7 @@ const UI = {
       <td class="mono am">${PowerCalc.fmtC(cycle.cylinder)}</td>
       <td class="mono" style="color:var(--vl)">${cycle.axis ? cycle.axis + '°' : '—'}</td>
       <td class="mono tx3">${typeof conf === 'number' ? conf + '%' : conf}</td>
+      <td>${badge}</td>
     `;
     tbody.appendChild(tr);
     tbody.scrollTop = tbody.scrollHeight;
@@ -258,57 +269,126 @@ const UI = {
     }
   },
 
-  /* ── Results page ───────────────────────────────────────────────── */
+  /* -- Results page (FIX 11: anisometropia warning added) ----------- */
   renderResults(results) {
     const pop = (r, suf) => {
-      const el = $('fin' + suf), cl = $('fin' + suf + 'Cl'), cy2 = $('fin' + suf + 'Cy');
-      const rxS = $('rx' + suf + 'S'), rxC = $('rx' + suf + 'C'), rxA = $('rx' + suf + 'A'), rxCl = $('rx' + suf + 'Cl');
+      const el   = $('fin' + suf), cl  = $('fin' + suf + 'Cl'), cy2 = $('fin' + suf + 'Cy');
+      const rxS  = $('rx'  + suf + 'S'), rxC = $('rx' + suf + 'C');
+      const rxA  = $('rx'  + suf + 'A'), rxCl = $('rx' + suf + 'Cl');
       if (!r) { if (el) el.textContent = 'Not measured'; return; }
-      if (el) { el.textContent = PowerCalc.fmtP(r.sphere); el.className = 'pwr ' + PowerCalc.pcls(r.sphere); }
-      if (cl) cl.textContent = PowerCalc.classify(r.sphere, r.cylinder);
+      if (el)  { el.textContent = PowerCalc.fmtP(r.sphere); el.className = 'pwr ' + PowerCalc.pcls(r.sphere); }
+      if (cl)  cl.textContent  = PowerCalc.classify(r.sphere, r.cylinder);
       if (cy2) cy2.textContent = Math.abs(r.cylinder || 0) >= 0.25
         ? `Cyl: ${PowerCalc.fmtC(r.cylinder)}, Axis: ${PowerCalc.fmtA(r.axis)}` : '';
-      if (rxS) rxS.textContent = PowerCalc.fmtP(r.sphere);
-      if (rxC) rxC.textContent = PowerCalc.fmtC(r.cylinder);
-      if (rxA) rxA.textContent = PowerCalc.fmtA(r.axis);
+      if (rxS)  rxS.textContent  = PowerCalc.fmtP(r.sphere);
+      if (rxC)  rxC.textContent  = PowerCalc.fmtC(r.cylinder);
+      if (rxA)  rxA.textContent  = PowerCalc.fmtA(r.axis);
       if (rxCl) rxCl.textContent = PowerCalc.classify(r.sphere, r.cylinder);
     };
     pop(results.right, 'R');
-    pop(results.left, 'L');
+    pop(results.left,  'L');
 
     $('dCyc').textContent = (results.right?.cycles || 0) + 'R / ' + (results.left?.cycles || 0) + 'L';
     const methods = [results.right?.method, results.left?.method].filter(Boolean);
-    $('dMeth').textContent = methods.length ? [...new Set(methods)].join('+').toUpperCase() : '—';
+    $('dMeth').textContent = methods.length ? [...new Set(methods)].join('+').toUpperCase() : '--';
     const confAvg = [results.right?.confidence, results.left?.confidence].filter(Boolean);
-    $('dCnf').textContent = confAvg.length ? Math.round(confAvg.reduce((s, v) => s + v, 0) / confAvg.length * 100) + '%' : '—';
+    $('dCnf').textContent = confAvg.length ? Math.round(confAvg.reduce((s,v)=>s+v,0)/confAvg.length*100)+'%' : '--';
+
+    /* FIX 11: Anisometropia warning
+       Sphere difference > 2 D or cylinder difference > 1.5 D between eyes
+       is clinically significant and warrants a professional check. */
+    if (results.right && results.left) {
+      const dSph = Math.abs((results.right.sphere  || 0) - (results.left.sphere  || 0));
+      const dCyl = Math.abs((results.right.cylinder|| 0) - (results.left.cylinder|| 0));
+      if (dSph > 2.0 || dCyl > 1.5) {
+        const anisoEl = $('anisoWarn');
+        if (anisoEl) {
+          anisoEl.textContent =
+            `Anisometropia detected: inter-eye sphere difference ${dSph.toFixed(2)} D` +
+            (dCyl > 1.5 ? `, cylinder difference ${dCyl.toFixed(2)} D` : '') +
+            '. Large differences between eyes can indicate amblyopia or measurement error -- ' +
+            'please consult a qualified optometrist.';
+          anisoEl.style.display = '';
+        }
+      }
+    }
   },
 };
 
-/* ── Exporter ────────────────────────────────────────────────────────── */
+/* -- FIX 9: Vertex distance helper ----------------------------------------
+   Converts back-vertex measured power to corneal-plane power.
+   For lenses >= +/-4 D the difference is clinically significant.
+   Standard vertex distance assumed: 12 mm (adjustable). */
+function vertexCorrect(P, vertexMM = 12) {
+  if (!P || Math.abs(P) < 4.0) return P;   /* skip correction below 4 D */
+  const d = vertexMM / 1000;
+  const denom = 1 - d * P;
+  return Math.abs(denom) > 0.01 ? Math.round((P / denom) / OPT_CONST.PREC) * OPT_CONST.PREC : P;
+}
+
+/* -- Exporter (FIX 9: vertex-corrected sphere added to exports) ----------- */
 const Exporter = {
   json(st) {
-    const d = { timestamp: new Date().toISOString(), tool: 'OptiScan Pro v6.0', method: 'focus_shift', results: {} };
+    const d = {
+      timestamp: new Date().toISOString(),
+      tool:      'OptiScan Pro v6.1',
+      method:    'focus_shift',
+      vertex_distance_mm: 12,
+      results:   {},
+    };
     for (const eye of ['right', 'left']) {
       const r = st.results[eye];
       if (r) d.results[eye] = {
-        sphere: r.sphere, cylinder: r.cylinder || 0, axis: r.axis || 0,
-        classification: PowerCalc.classify(r.sphere, r.cylinder),
-        confidence: r.confidence, cycles: r.cycles, method: r.method,
-        allPowers: r.allPowers,
+        sphere_measured:   r.sphere,
+        sphere_at_cornea:  vertexCorrect(r.sphere),   /* FIX 9 */
+        cylinder:          r.cylinder  || 0,
+        axis:              r.axis      || 0,
+        classification:    PowerCalc.classify(r.sphere, r.cylinder),
+        confidence:        r.confidence,
+        low_confidence:    r.lowConfidence ?? false,  /* FIX 7 */
+        stddev:            r.stddev != null ? +r.stddev.toFixed(3) : null,
+        cycles:            r.cycles,
+        method:            r.method,
+        allPowers:         r.allPowers,
       };
     }
     this._dl(JSON.stringify(d, null, 2), 'application/json', 'optiscan.json');
   },
+
   csv(st) {
-    const rows = [['Eye', 'Sphere (D)', 'Cylinder (D)', 'Axis (deg)', 'Confidence', 'Cycles', 'Classification', 'Method']];
+    const rows = [[
+      'Eye', 'Sphere Measured (D)', 'Sphere at Cornea (D)',
+      'Cylinder (D)', 'Axis (deg)', 'Confidence', 'Low Confidence',
+      'Std Dev (D)', 'Cycles', 'Classification', 'Method',
+    ]];
     for (const [k, lbl] of [['right', 'Right (OD)'], ['left', 'Left (OS)']]) {
       const r = st.results[k];
-      rows.push(r ? [lbl, r.sphere, r.cylinder || 0, r.axis || 0, r.confidence?.toFixed(2), r.cycles, PowerCalc.classify(r.sphere, r.cylinder), r.method || 'focus_shift'] : [lbl, '—', '—', '—', '—', '—', 'Not measured', '—']);
+      rows.push(r
+        ? [
+            lbl,
+            r.sphere,
+            vertexCorrect(r.sphere),       /* FIX 9 */
+            r.cylinder || 0,
+            r.axis     || 0,
+            r.confidence?.toFixed(2),
+            r.lowConfidence ? 'YES' : 'no', /* FIX 7 */
+            r.stddev?.toFixed(3) ?? '--',
+            r.cycles,
+            PowerCalc.classify(r.sphere, r.cylinder),
+            r.method || 'focus_shift',
+          ]
+        : [lbl, '--', '--', '--', '--', '--', '--', '--', '--', 'Not measured', '--']);
     }
     this._dl(rows.map(r => r.join(',')).join('\n'), 'text/csv', 'optiscan.csv');
   },
-  _dl(content, type, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name; a.click(); }
+
+  _dl(content, type, name) {
+    const a = document.createElement('a');
+    a.href     = URL.createObjectURL(new Blob([content], { type }));
+    a.download = name;
+    a.click();
+  },
 };
 
-/* ── Helper ──────────────────────────────────────────────────────────── */
+/* -- Helper ----------------------------------------------------- */
 function $(id) { return document.getElementById(id); }

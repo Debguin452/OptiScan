@@ -633,7 +633,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
         <div class="smallest am mt1" id="finLCy"></div>
       </div>
       <div class="smallest tx3 tc mt5" style="line-height:1.9;padding:0 8px">
-        ⚠ Approximate estimate (±0.25–0.50 D typical). Accuracy depends on camera quality, lighting conditions, and lens distance. Always consult a licensed optometrist for clinical prescriptions.
+        <div id="anisoWarn" style="display:none;background:rgba(255,169,77,.12);border:1px solid var(--am);color:var(--am);border-radius:6px;padding:10px 14px;font-size:.82rem;line-height:1.4;margin:12px 0"></div>
+
+            ⚠ Approximate estimate (±0.25–0.50 D typical). Accuracy depends on camera quality, lighting conditions, and lens distance. Always consult a licensed optometrist for clinical prescriptions.
       </div>
     </div>
   </div>
@@ -923,6 +925,37 @@ const Cam = {
       await t.applyConstraints({advanced:[{focusMode:mode}]});
     }catch(e){}
   },
+
+  /**
+   * probeFocusControl -- verify that focus mode constraints actually take effect.
+   *
+   * optiscan.html uses frequency analysis (pattern magnification) rather than
+   * focus-shift, so focus lock/unlock is only used as a hint. If it fails we
+   * continue in passive mode: the Wave state machine still detects lens
+   * presence from period ratio changes, but we skip the AF-trigger step and
+   * instead rely on the camera's natural continuous-AF settling.
+   *
+   * Returns { works: bool }. Stored in Cam.focusProbe.
+   */
+  async probeFocusControl(vid){
+    const result = { works: false };
+    if(!this.stream) return result;
+    const track = this.stream.getVideoTracks()[0];
+    if(!track) return result;
+    try{
+      await track.applyConstraints({advanced:[{focusMode:'manual'}]});
+      await new Promise(r=>setTimeout(r,250));
+      const s = track.getSettings?.()??{};
+      result.works = (s.focusMode==='manual');
+      // Restore continuous regardless
+      await track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+    }catch(e){ result.works=false; }
+    this.focusProbe = result;
+    console.log('[OptiScan] Focus control probe (optiscan):', result);
+    return result;
+  },
+
+  focusProbe: null,
 
   capture(vid){
     const v=vid||document.querySelector('video');
@@ -1264,15 +1297,35 @@ const UI = {
 /* ══════════════════════════════════════════
    EXPORTER
 ══════════════════════════════════════════ */
+/* Fix 9: vertex distance correction for export (standard 12 mm) */
+function vtxCorr(P,vMM=12){if(!P||Math.abs(P)<4)return P;const d=vMM/1000;const dn=1-d*P;return Math.abs(dn)>0.01?Math.round((P/dn)/C.PREC)*C.PREC:P;}
+
 const Exp = {
   json(st){
-    const d={timestamp:new Date().toISOString(),tool:'OptiScan Pro v5.0',lensDistMM:st.distMM,results:{}};
-    for(const eye of['right','left']){const r=st.results[eye];if(r)d.results[eye]={sphere:r.sphere,cylinder:r.cylinder||0,axis:r.axis||0,magnification:r.M,focalLengthMM:r.f,classification:Opt.cls(r.sphere,r.cylinder),method:r.method,cycles:r.cycles||1};}
+    const d={timestamp:new Date().toISOString(),tool:'OptiScan Pro v5.1',
+      lensDistMM:st.distMM,vertex_distance_mm:12,results:{}};
+    for(const eye of['right','left']){
+      const r=st.results[eye];
+      if(r)d.results[eye]={
+        sphere_measured:r.sphere,
+        sphere_at_cornea:vtxCorr(r.sphere),   /* Fix 9 */
+        cylinder:r.cylinder||0,axis:r.axis||0,
+        magnification:r.M,focalLengthMM:r.f,
+        classification:Opt.cls(r.sphere,r.cylinder),
+        method:r.method,cycles:r.cycles||1,
+      };
+    }
     this._dl(JSON.stringify(d,null,2),'application/json','optiscan.json');
   },
   csv(st){
-    const rows=[['Eye','Sphere (D)','Cylinder (D)','Axis (deg)','Magnification','Focal Length (mm)','Classification','Method','Cycles']];
-    for(const[k,lbl]of[['right','Right (OD)'],['left','Left (OS)']]){const r=st.results[k];rows.push(r?[lbl,r.sphere,r.cylinder||0,r.axis||0,r.M?.toFixed(4),r.f?.toFixed(1),Opt.cls(r.sphere,r.cylinder),r.method||'frequency',r.cycles||1]:[lbl,'—','—','—','—','—','Not measured','—','—']);}
+    const rows=[['Eye','Sphere Measured (D)','Sphere at Cornea (D)','Cylinder (D)','Axis (deg)','Magnification','Focal Length (mm)','Classification','Method','Cycles']];
+    for(const[k,lbl]of[['right','Right (OD)'],['left','Left (OS)']]){
+      const r=st.results[k];
+      rows.push(r
+        ?[lbl,r.sphere,vtxCorr(r.sphere),r.cylinder||0,r.axis||0,  /* Fix 9 */
+           r.M?.toFixed(4),r.f?.toFixed(1),Opt.cls(r.sphere,r.cylinder),r.method||'frequency',r.cycles||1]
+        :[lbl,'--','--','--','--','--','--','Not measured','--','--']);
+    }
     this._dl(rows.map(r=>r.join(',')).join('\n'),'text/csv','optiscan.csv');
   },
   _dl(content,type,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();}
@@ -1408,6 +1461,19 @@ const App = {
     $('scanEyeLbl').textContent=isR?'Right':'Left';
     $('scanEyeCode').textContent=isR?'(OD)':'(OS)';
 
+    // Probe focus control once per session
+    if(!Cam.focusProbe){
+      UI.status('PROBING FOCUS','warn');
+      await Cam.probeFocusControl(vid);
+    }
+    const focusWorks = Cam.focusProbe?.works ?? false;
+    if(!focusWorks){
+      UI.notify(
+        'Focus mode control not available on this camera -- running in passive mode. ' +
+        'Frequency analysis still works fully; hold lens steady when prompted.',
+        'warn');
+    }
+
     // Reset wave state
     Wave.reset();
     this.st.waveAllMeas=[];
@@ -1448,6 +1514,7 @@ const App = {
       :'ℹ Camera does not expose focus distance. Using frequency analysis with manual distance setting.';
     const mb=$('methodBadge');
     if(specs.focusDistanceCaps){mb.style.display='';mb.textContent='FOCUS-DIST API';mb.className='badge hot';}
+    else if(Cam.focusProbe&&!Cam.focusProbe.works){mb.style.display='';mb.textContent='FREQ (PASSIVE)';mb.className='badge warn';}
     else{mb.style.display='';mb.textContent='FREQ ANALYSIS';mb.className='badge';}
   },
 
@@ -1718,13 +1785,31 @@ const App = {
     $('dLF').textContent=left&&isFinite(left.f)?left.f?.toFixed(1)+' mm':'—';
     $('dCyc').textContent=(right?.cycles||0)+'R / '+(left?.cycles||0)+'L';
     const methods=[right?.method,left?.method].filter(Boolean);
-    $('dMeth').textContent=methods.length?[...new Set(methods)].join('+').toUpperCase():'—';
+    $('dMeth').textContent=methods.length?[...new Set(methods)].join('+').toUpperCase():'--';
     const confAvg=mean([right?.strength,left?.strength].filter(Boolean));
-    $('dCnf').textContent=confAvg?Math.round(Math.min(100,confAvg*300))+'%':'—';
+    $('dCnf').textContent=confAvg?Math.round(Math.min(100,confAvg*300))+'%':'--';
+
+    /* Fix 11: Anisometropia warning */
+    if(right&&left){
+      const dSph=Math.abs((right.sphere||0)-(left.sphere||0));
+      const dCyl=Math.abs((right.cylinder||0)-(left.cylinder||0));
+      if(dSph>2.0||dCyl>1.5){
+        const el=$('anisoWarn');
+        if(el){
+          el.textContent=
+            `Anisometropia detected: inter-eye sphere difference ${dSph.toFixed(2)} D`+
+            (dCyl>1.5?`, cylinder difference ${dCyl.toFixed(2)} D`:'')+
+            '. Large differences between eyes can indicate amblyopia or measurement error -- '+
+            'please consult a qualified optometrist.';
+          el.style.display='';
+        }
+      }
+    }
   },
 
   reset(){
     Cam.stop();Wave.reset();
+    Cam.focusProbe=null;  /* re-probe on next scan */
     this.st={currentEye:'right',distMM:50,refRes:null,measured:new Set(),results:{right:null,left:null},
       mode:'wave',focDistAvail:false,isCapturing:false,waveRef:null,waveAllMeas:[],waveAllFocDist:[],waveRefFocDist:null,scanActive:false};
     WaveViz.history=[];
@@ -1778,5 +1863,16 @@ const App = {
 function $(id){return document.getElementById(id);}
 window.addEventListener('DOMContentLoaded',()=>App.init());
 </script>
+
+    <!-- Fix 13: PWA service worker registration -->
+    <script>
+      if('serviceWorker' in navigator){
+        window.addEventListener('load',()=>{
+          navigator.serviceWorker.register('./sw.js')
+            .then(r=>console.log('[OptiScan] SW registered:',r.scope))
+            .catch(e=>console.warn('[OptiScan] SW failed:',e));
+        });
+      }
+    </script>
 </body>
 </html>

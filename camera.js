@@ -134,6 +134,31 @@ const Camera = {
       result.unlockWorks = modeOk && huntingDetected;
     } catch (_) { result.unlockWorks = false; }
 
+    /* Test 3: focus DISTANCE range sanity.
+     * hasFocusAPI = true only means the capability exists in getCapabilities().
+     * Many Android devices report sentinel values (2^63, FLT_MAX, Infinity)
+     * from getSettings().focusDistance even when the capability is listed.
+     * Sample 4 frames and check if ANY returned value is in the physical range
+     * 0.02 – 20 m.  If all are out of range, mark focusDistanceReliable = false
+     * so callers know not to trust focus-shift measurements. */
+    result.focusDistanceReliable = false;
+    try {
+      const FOCUS_MIN = 0.02, FOCUS_MAX = 20;
+      for (let i = 0; i < 4; i++) {
+        await delay(80);
+        const s  = this._track.getSettings?.() ?? {};
+        const fd = s.focusDistance ?? null;
+        if (fd !== null && isFinite(fd) && fd >= FOCUS_MIN && fd <= FOCUS_MAX) {
+          result.focusDistanceReliable = true;
+          break;
+        }
+      }
+      if (!result.focusDistanceReliable) {
+        console.warn('[OptiScan] probeFocusControl: focusDistance out of physical range -- ' +
+          'camera HAL returning sentinel. Focus-shift measurements will fall back to blur-profile.');
+      }
+    } catch (_) { result.focusDistanceReliable = false; }
+
     result.focusControlWorks = result.lockWorks && result.unlockWorks;
     this.focusProbe = result;
     console.log('[OptiScan] Focus control probe:', result);

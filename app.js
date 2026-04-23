@@ -153,9 +153,19 @@ const App = {
       UI.status('PROBING FOCUS', 'warn');
       UI.notify('Testing focus control -- hold camera still...', 'info');
       const probe = await Camera.probeFocusControl(vid);
-      if (probe.focusControlWorks) {
+      if (probe.focusControlWorks && probe.focusDistanceReliable) {
         this._dev.measureMode = 'focus_shift';
-        console.log('[OptiScan] Mode: focus_shift (lock/unlock verified)');
+        console.log('[OptiScan] Mode: focus_shift (lock/unlock + distance verified)');
+      } else if (probe.focusControlWorks && !probe.focusDistanceReliable) {
+        /* Lock/unlock works but distance returns sentinel values (e.g. 2^63).
+           Focus-shift path will hit null d_lens every cycle and auto-degrade
+           to blur-profile — set mode accordingly from the start. */
+        this._dev.measureMode = 'blur_unblur';
+        console.log('[OptiScan] Mode: blur_unblur (focus distance API returns sentinel values)');
+        UI.notify(
+          'Camera reports focus distance as a sentinel value (HAL does not expose real data). ' +
+          'Switching to blur/unblur cycle mode for accurate measurement.',
+          'warn');
       } else {
         this._dev.measureMode = 'blur_unblur';
         console.log('[OptiScan] Mode: blur_unblur (focus control unresponsive)');
@@ -228,11 +238,16 @@ const App = {
     } else {
       this._cal.dRef = this._dev.manualDistM;
       const maxNeg = (1 / this._dev.manualDistM).toFixed(2);
-      UI.notify(
-        `No focus distance API -- using ${this._dev.manualDistM.toFixed(1)} m manual reference. ` +
-        `Blur-profile method active (+-0.5 D accuracy). ` +
-        `For myopia > -${maxNeg} D, hold target at <= ${Math.round(100/2.5)} cm.`,
-        'warn');
+      /* Distinguish between: no capability at all vs. capability exists but returns sentinel */
+      const hasCap = this._dev.hasFocusAPI;
+      const msg = hasCap
+        ? `Focus distance API exists but returns unusable values (camera HAL sentinel). ` +
+          `Using ${this._dev.manualDistM.toFixed(1)} m manual reference -- ` +
+          `blur-profile method active (+-0.5 D accuracy).`
+        : `No focus distance API -- using ${this._dev.manualDistM.toFixed(1)} m manual reference. ` +
+          `Blur-profile method active (+-0.5 D accuracy). ` +
+          `For myopia > -${maxNeg} D, hold target at <= ${Math.round(100/2.5)} cm.`;
+      UI.notify(msg, 'warn');
       $('calDistVal').textContent = this._dev.manualDistM.toFixed(1) + ' m (manual)';
     }
 
@@ -278,6 +293,31 @@ const App = {
     const maxNegPower = 1 / dRef;
 
     let cycleResult;
+
+    /* ── Runtime sentinel / frozen-distance guard ──────────────────────────
+     * Even after FocusAPI.read() sanitization, some edge cases can produce
+     * d_ref === d_lens (focus distance didn't move through the lens):
+     *   - Camera needs > 14 s to refocus (our timeout)
+     *   - Negative lens pushes virtual image behind camera (d_lens undefined)
+     *   - Driver fixed at one value across all AF operations
+     *
+     * Detection: if |d_lens - d_ref| < 5 mm after blur was detected, the
+     * focus system did not respond. Degrade to blur-profile for this cycle
+     * and every subsequent cycle in this eye by clearing hasFocusAPI.       */
+    if (m.dLens && dRef && Math.abs(m.dLens - dRef) < 0.005 && m.blurDepth > 0.05) {
+      console.warn('[OptiScan] focus distance unchanged (Δ <5 mm) despite blur --',
+        'dRef=', dRef.toFixed(4), 'dLens=', m.dLens.toFixed(4),
+        'blurDepth=', (m.blurDepth*100).toFixed(1)+'%');
+      UI.notify(
+        'Focus distance did not change through the lens -- ' +
+        'camera AF may be stuck or negative lens pushes focal plane behind sensor. ' +
+        'Switching to blur-profile method for remaining cycles.',
+        'warn');
+      /* Degrade for all remaining cycles this eye */
+      this._dev.hasFocusAPI = false;
+      /* Treat this cycle as blur-profile (nullify dLens so path falls through) */
+      m = { ...m, dLens: null };
+    }
 
     if (m.dLens && dRef) {
       /* ---- Focus-API path ---- */

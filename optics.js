@@ -283,15 +283,42 @@ const FocusAPI = {
     this._kalman.reset(); WasmEngine.kalmanReset();
     return !!this._caps.focusDistance;
   },
+  /* ── Sentinel values returned by real camera HALs ───────────────────────
+   * Android Camera2 / WebRTC reports these when the driver can't provide
+   * a real focus distance (focused at hyperfocal, manual lens, etc.):
+   *
+   *   float32 0x5F000000 = 2^63  ≈ 9.22e18  (most common Android sentinel)
+   *   float32 0x7F7FFFFF = FLT_MAX ≈ 3.40e38
+   *   Infinity, NaN
+   *   Zero or negative  (driver error / not initialised)
+   *
+   * Physical focus distances for smartphone cameras are 0.02 – 20 m.
+   * Anything outside that window is garbage and must be treated as null.
+   */
+  _FOCUS_MIN: 0.02,   /* 2 cm — close macro */
+  _FOCUS_MAX: 20,     /* 20 m — beyond hyperfocal for all practical cases */
+
   read(filtered=true) {
     if (!this._track) return null;
     try {
-      const s=this._track.getSettings();
-      const raw=s.focusDistance??null;
-      if (raw===null) return null;
+      const s   = this._track.getSettings();
+      const raw = s.focusDistance ?? null;
+      if (raw === null) return null;
+      /* Reject non-finite values and known sentinel ranges */
+      if (!isFinite(raw) || raw < this._FOCUS_MIN || raw > this._FOCUS_MAX) {
+        /* Log once so the developer can see what the camera is reporting */
+        if (!this._sentinelWarned) {
+          console.warn('[OptiScan] FocusAPI: rejecting out-of-range focusDistance =', raw,
+            '-- camera HAL sentinel or uninitialized value; falling back to null.');
+          this._sentinelWarned = true;
+        }
+        return null;
+      }
+      this._sentinelWarned = false;   /* reset once we get a valid value */
       return filtered ? this._kalman.update(raw) : raw;
     } catch(_){ return null; }
   },
+  _sentinelWarned: false,
   async lock()   { if(!this._track)return false; try{await this._track.applyConstraints({advanced:[{focusMode:'manual'}]});return true;}catch(_){return false;} },
   async unlock() { if(!this._track)return false; try{await this._track.applyConstraints({advanced:[{focusMode:'continuous'}]});return true;}catch(_){return false;} },
   /* FIX 5: waitForFocus uses shared ConvergenceDetector */

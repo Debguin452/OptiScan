@@ -202,9 +202,25 @@ const UI = {
     if (specs.focusRange) add('FOCUS RANGE', `${specs.focusRange.min?.toFixed(1)}–${specs.focusRange.max?.toFixed(1)} m`, true);
     add('FOCUS API', specs.hasFocusAPI ? '✅ Available' : '⚠ Not exposed', specs.hasFocusAPI);
     $('camSpecCard').style.display = '';
-    $('focusApiNote').textContent = specs.hasFocusAPI
-      ? '✅ Focus-distance API available — will use autofocus shift for highest accuracy.'
-      : '⚠ Camera does not expose focus distance. Sharpness-comparison fallback will be used (lower accuracy).';
+    /* focusDistanceReliable is set by probeFocusControl() after goScan starts.
+       At showSpecs time (called during camera init) it may not be set yet,
+       so we check both the capability flag and the probe result. */
+    const probe = (typeof Camera !== 'undefined') ? Camera.focusProbe : null;
+    const distReliable = probe ? probe.focusDistanceReliable : null; /* null = not probed yet */
+    let apiNote, apiClass;
+    if (!specs.hasFocusAPI) {
+      apiNote  = '⚠ Camera does not expose focus distance. Blur-profile fallback active (±0.5 D accuracy).';
+      apiClass = 'warn';
+    } else if (distReliable === false) {
+      apiNote  = '⚠ Focus distance API exists but returns sentinel values (camera HAL bug). ' +
+                 'Blur/unblur cycle mode active — results will use blur-profile method.';
+      apiClass = 'warn';
+    } else {
+      apiNote  = '✅ Focus-distance API available — using autofocus shift for highest accuracy.';
+      apiClass = 'ok';
+    }
+    const noteEl = $('focusApiNote');
+    if (noteEl) { noteEl.textContent = apiNote; noteEl.className = 'notif ' + apiClass; noteEl.style.display = ''; }
   },
 
   /* ── Cycle table ────────────────────────────────────────────────── */
